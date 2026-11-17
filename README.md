@@ -85,7 +85,18 @@ Without the allowlist, the bot's wrap would have won (that is exactly loop C). S
 
 ## It runs (testnets, 17 Nov 2026)
 
-Every deployment ran end to end (v4 above, v3, v2, v1 below). Times are **block timestamps**; `./script/latency.sh <origin tx> <lasna tx> <payout tx>`
+**v5 (current: fees fund REACT, data-word winners, cron on and funded)**: reactive (Lasna) `0xD27824e127D8615e7e24218f3F9DF163901253D0`,
+escrow (Base Sepolia) `0x1cD6c715f1b5579161864361e275e250a11c8004`. Nobody touched either bounty after posting it.
+
+| Loop | Origin | Reactive (Lasna) | Settlement (Base Sepolia) | Time |
+|---|---|---|---|---|
+| **Real protocol:** "first to supply WBTC to Aave v3 on Sepolia", won by a stranger (`0x7a3dB09c…`, supplied 0.01 WBTC) | [Aave Supply](https://sepolia.etherscan.io/tx/0xfed5365395b7a5cc2d0a1d027eb7f268ee9ca912901526644302c9cc6a48e725) 22:50:36 | [ProofSeen](https://lasna.reactscan.net/tx/0xac93f7450f67f31ea4a61eceee3ad18096d7577099da2719d710d6c918c97468) 22:50:36 | [BountyPaid](https://sepolia.basescan.org/tx/0xa3d235420b2711ef47e4eb30c38174cd458b93e77c636957483ff49f6f4e0be5) 22:50:38 | **2 s** |
+| **Unattended refund:** judged bounty, deadline 23:10:01, nobody claims | none | [Cron1000 tick, ExpiryRequested](https://lasna.reactscan.net/tx/0xe451e8f1b7053a141395f964aeafaf2a0332231c63849ee520afcba6f1563d39) 23:17:11 | [BountyRefunded](https://sepolia.basescan.org/tx/0x04074579df25c7d9f0ccb63f27a5025e6947c9d89b1a2e7dcce4c2bcbdf28083) 23:17:14 | next tick |
+| **Fees → REACT:** `fundReactive()` | | watcher +0.00381041 lREACT (exactly 100 x the swept fees) | [fundReactive](https://sepolia.basescan.org/tx/0x949f738aac196727633099a42fdd336799429b2b4b37a89b8847d261289f9fa5): 0.0000381 ETH of fee surplus to Reactive's faucet | |
+
+The v5 cron runs unattended; `fundedUntil()` on the reactive contract shows how long its REACT lasts at the idle rate.
+
+Every earlier deployment ran end to end too (v4 above, v3, v2, v1 below). Times are **block timestamps**; `./script/latency.sh <origin tx> <lasna tx> <payout tx>`
 recomputes any row from public RPCs.
 
 **v2 (current, with the minimum and the posting fee)**: reactive (Lasna) and escrow (Base Sepolia) `0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802`
@@ -122,6 +133,9 @@ reactive contracts on Reactive Lasna.
 
 | Version | Contract | Chain | Address | Source |
 |---|---|---|---|---|
+| v5 (fees -> REACT, data-word winners) | HandshakeReactive | Reactive Lasna (5318007) | `0xD27824e127D8615e7e24218f3F9DF163901253D0` | [Sourcify](https://repo.sourcify.dev/5318007/0xD27824e127D8615e7e24218f3F9DF163901253D0) |
+| v5 | HandshakeEscrow | Base Sepolia (84532) | `0x1cD6c715f1b5579161864361e275e250a11c8004` | [Sourcify](https://repo.sourcify.dev/84532/0x1cD6c715f1b5579161864361e275e250a11c8004) |
+| v5 | BountyVault | Base Sepolia | `0x3B05973D540d653B2F6E05Ee351648Bc0862182c` | [Sourcify](https://repo.sourcify.dev/84532/0x3B05973D540d653B2F6E05Ee351648Bc0862182c) |
 | v4 (allowlist + runway) | HandshakeReactive | Reactive Lasna (5318007) | `0x8907Bda54e22fDaC6A751e5f84DCAe95E6e4c579` | [Sourcify](https://repo.sourcify.dev/5318007/0x8907Bda54e22fDaC6A751e5f84DCAe95E6e4c579) |
 | v4 | HandshakeEscrow | Base Sepolia (84532) | `0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5` | [Sourcify](https://repo.sourcify.dev/84532/0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5) |
 | v4 | BountyVault | Base Sepolia | `0x7f219C1547c5cbF98EceFf25C0BD98746d1d24B7` | [Sourcify](https://repo.sourcify.dev/84532/0x7f219C1547c5cbF98EceFf25C0BD98746d1d24B7) |
@@ -162,7 +176,7 @@ block 8602000); ticks come every 1000 blocks (about 17.6 min at 1.06 s per block
 A whole bounty lifecycle (posted, condition, proof, close) is a handful of `react()` calls of about 0.011-0.013 REACT each. At the REACT
 price of 17 Nov (0.0022 USD) that is about **0.2 cents a day** idle plus about 0.01 cents per bounty; 10 REACT keeps a contract running
 for over a week. When nothing is open the operator can switch the cron off (`setCron(false)`): proofs still pay, refunds then need
-`expire(id)`. On the testnets the v3 cron is off until the next faucet top-up; v2 runs with the cron on.
+`expire(id)`. On the testnets the crons of v5, v3 and v2 run unattended (v3 and v5 topped up 17 Nov from a faucet).
 
 **`fundedUntil()` (v4).** The reactive contract publishes its own runway: `(balance - debt) / costPerTick` ticks from now, at the measured
 idle rate (`setBurnRate(0.0112 REACT, 1053 s)`). A poster compares it with the bounty deadline; past it, the refund falls back to the
@@ -190,8 +204,8 @@ one transaction from your browser wallet on Base Sepolia, and lists the latest b
 ## Run it yourself
 
 ```shell
-forge test                                   # 59 tests + 7 invariants, see below
-./script/mutants.sh                          # 13 planted bugs; the suite must kill every one
+forge test                                   # 69 tests + 7 invariants, see below
+./script/mutants.sh                          # 16 planted bugs; the suite must kill every one
 ./script/fund.sh lreact 0.02                 # Sepolia ETH -> Lasna lREACT (Reactive's faucet contract)
 ./script/fund.sh base 0.01                   # Sepolia ETH -> Base Sepolia (L1StandardBridge)
 RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
@@ -201,7 +215,9 @@ RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
 
 The scripts read a testnet key from an env file (`RX_TN_KEY`, `RX_TN_ADDR`; optionally a second key `RX_KEEPER_KEY` for the keeper).
 
-Tests (`forge test`): **59 tests and 7 invariants**, all passing. `test/HandshakeFrontRun.t.sol` (11): a copied job tx is ignored and the
+Tests (`forge test`): **69 tests and 7 invariants**, all passing. `test/HandshakeFees.t.sol` (7): fees above the floor
+fund the watcher, auto every 10 fees, never bounty money, a broken funder never blocks a post. `HandshakeLiquidationTest` (3): an
+Aave-style `LiquidationCall` pays the liquidator from data word 2; a small liquidation or a non-address word never pays. `test/HandshakeFrontRun.t.sol` (11): a copied job tx is ignored and the
 claimant is still paid; a once-only job copied first can only refund; the escrow refuses an off-list winner even if the watcher were
 wrong; the allowlist is emitted before the condition; only the issuer can restrict; `fundedUntil()` from balance, debt and rate.
 - `test/Handshake.t.sol` (10): the full cross-chain flows through a mocked system contract and callback proxy: proof payout, filters,
@@ -215,11 +231,12 @@ wrong; the allowlist is emitted before the condition; only the issuer can restri
   allowance, bad token addresses, fee-on-transfer tokens, separate ETH/token books, and a fuzz test over amounts and transfer fees.
 - `test/HandshakeInvariant.t.sol` (7 invariants, 64 runs x 50 random calls: ETH and USDC posts, claims, accepts, cancels, time jumps,
   proof and expiry callbacks including duplicates and wrong ids, public expiry, gas bills): the vault always equals the open bounties;
-  money is conserved; no bounty is closed twice or changes after closing; callback gas is billed only from fees; the token books balance
+  money is conserved; no bounty is closed twice or changes after closing; callback gas and REACT are paid only from fees; the token books balance
   even with a 1 % fee-on-transfer USDC; a restricted bounty never pays an address off its allowlist.
-- `script/mutants.sh`: 13 planted bugs (a missing balance update on payout or refund, no "still open" check, paying after the deadline,
+- `script/mutants.sh`: 16 planted bugs (a missing balance update on payout or refund, no "still open" check, paying after the deadline,
   early expiry, the fee leaking into the vault, no minimum, token books, trusting the requested token amount, no exact fee, the escrow
-  or the watcher letting an off-list winner through, the allowlist emitted after the condition). The suite kills all 13.
+  or the watcher letting an off-list winner through, the allowlist emitted after the condition, a fee sweep that ignores the gas floor or credits the caller, a data-word
+  winner that accepts a non-address). The suite kills all 16.
 
 ## Limits
 

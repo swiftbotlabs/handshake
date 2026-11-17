@@ -11,7 +11,7 @@ d() { python3 -I -c "import json,sys;print(json.load(open('deployments.json'))[s
 ESC=$(d escrow); RX=$(d reactive); LOG=demo_log.md
 tx() { python3 -I -c "import json,sys;r=json.load(sys.stdin);print(r['transactionHash'], r['status'])"; }
 note() { echo "- $(date -u +%FT%TZ) $*" | tee -a $LOG; }
-echo "" >> $LOG; echo "### v5 (escrow $ESC, reactive $RX)" >> $LOG
+grep -q "### v5 (escrow $ESC" $LOG || { echo "" >> $LOG; echo "### v5 (escrow $ESC, reactive $RX)" >> $LOG; }
 case "${1:-all}" in all|R)
   h=$(cast send --rpc-url $BASE_SEP --private-key "$RX_TN_KEY" $ESC 'postJudged(string,uint256)' "Unattended refund test (v5): nobody will claim this" \
       $(( $(date +%s) + 1200 )) --value 0.00012ether --json | tx)

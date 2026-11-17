@@ -12,6 +12,7 @@ LASNA = "https://lasna-rpc.rnk.dev/"
 EXPLORER = "https://sepolia.basescan.org"
 USDC = "0x036cbd53842c5426634e7929541ec2318f3dcf7e"
 ESCROWS = [  # version, escrow, first block to scan, reactive
+    ("v5", "0x1cD6c715f1b5579161864361e275e250a11c8004", 60157500, "0xD27824e127D8615e7e24218f3F9DF163901253D0"),
     ("v4", "0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5", 60155400, "0x8907Bda54e22fDaC6A751e5f84DCAe95E6e4c579"),
     ("v3", "0xf45D582Edbf7dB418b32C6cdA13D16ff57Cae7A2", 60146500, "0xe3818074Ba24d7c64642D8a9607A86d514B770F1"),
     ("v2", "0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802", 60125000, "0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802"),
@@ -82,7 +83,7 @@ def main():
             pass
     now = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
     out = [f'<p class="hint">Snapshot from chain logs, {now} (no JavaScript needed; the live list replaces it). '
-           f'{stats["paid"]} paid · {stats["refunded"]} refunded · {stats["open"]} open, across escrow versions v2-v4.</p>']
+           f'{stats["paid"]} paid · {stats["refunded"]} refunded · {stats["open"]} open, across escrow versions v2-v5.</p>']
     for x in rows:
         amt = x["amount"]
         reward = (f"{amt / 1e6:g} USDC" if x["token"] and x["token"].lower() == USDC else
@@ -95,11 +96,11 @@ def main():
         if x["tx"]: meta.append(f'<a href="{EXPLORER}/tx/{x["tx"]}">{"payout" if x["status"] == "paid" else "refund"} tx</a>')
         out.append(f'<div class="b"><span class="n">{x["ver"]}·{x["id"]}</span><span class="t">{html.escape(x["title"] or "(untitled)")}</span>'
                    f'<span class="pill {x["status"]}">{x["status"]}</span><span class="m">{" · ".join(meta)}</span></div>')
-    if "v4" in runway:
-        fu, bal = runway["v4"]
+    if "v5" in runway:
+        fu, bal = runway["v5"]
         txt = ("deadline cron off (refunds by the public expire() until it is switched on)" if fu >= 2**255
                else f"deadline cron funded until {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(fu))}")
-        out.append(f'<p class="hint">v4 watcher on Reactive Lasna: {bal / 1e18:.4f} lREACT, {txt} (fundedUntil()).</p>')
+        out.append(f'<p class="hint">v5 watcher on Reactive Lasna: {bal / 1e18:.4f} lREACT, {txt} (fundedUntil()).</p>')
     snap = "\n".join(out)
     page = ROOT / "web" / "index.html"
     s = page.read_text()
