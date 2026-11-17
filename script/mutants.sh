@@ -15,6 +15,9 @@ NAMES+=("settleProof pays after the deadline");  PATCHES+=('/function settleProo
 NAMES+=("expire() allowed before the deadline"); PATCHES+=('s/if (block.timestamp < b.deadline) revert TooEarly/if (false) revert TooEarly/')
 NAMES+=("posting fee goes to the vault too");    PATCHES+=('s/uint256 amount = msg.value - postFee;/uint256 amount = msg.value;/')
 NAMES+=("minimum not enforced");                 PATCHES+=('s/if (msg.value < minBounty + postFee) revert/if (false) revert/')
+NAMES+=("token payout forgets openTotalOf");    PATCHES+=('/function _payWinner/,/^    }/ s/openTotalOf\[token\] -= amount;/\/\/ mutant/')
+NAMES+=("token bounty trusts the requested amount (fee-on-transfer)"); PATCHES+=('s/uint256 received = _balanceOf(token_, address(vault)) - before;/uint256 received = amount_;/')
+NAMES+=("token post skips the exact-fee check"); PATCHES+=('s/if (msg.value != postFee) revert WrongFee/if (false) revert WrongFee/')
 killed=0
 for i in "${!NAMES[@]}"; do
   cp src/HandshakeEscrow.sol "$work/src/HandshakeEscrow.sol"

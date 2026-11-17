@@ -26,6 +26,13 @@ contract BountyVault {
         (bool ok,) = to_.call{ value: amount_ }("");
         if (!ok) revert TransferFailed();
     }
+
+    /// @notice ERC-20 payout (USDC and friends). Accepts tokens that return nothing or true; anything else reverts.
+    function releaseToken(address token_, address to_, uint256 amount_) external {
+        if (msg.sender != escrow) revert OnlyEscrow();
+        (bool ok, bytes memory ret) = token_.call(abi.encodeWithSelector(0xa9059cbb, to_, amount_)); // transfer(address,uint256)
+        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();
+    }
 }
 
 /// @title HandshakeEscrow
@@ -69,6 +76,8 @@ contract HandshakeEscrow is AbstractCallback {
     error UnknownClaim();
     error TooEarly(uint256 id, uint256 deadline, uint256 nowTs);
     error BelowMinimum(uint256 sent, uint256 required);
+    error WrongFee(uint256 sent, uint256 required);
+    error TokenTransferFailed();
 
     event BountyPosted(
         uint256 indexed id,
@@ -96,6 +105,8 @@ contract HandshakeEscrow is AbstractCallback {
     /// @notice The posting fee stays in this contract's own balance, the gas float the callback proxy bills for every
     ///         settleProof / expireByReactive delivered here. Spam therefore pays for the callbacks it causes.
     event FeeCollected(uint256 indexed id, uint256 fee);
+    /// @notice An ERC-20 bounty (e.g. USDC). BountyPosted carries the token amount actually received by the vault.
+    event BountyToken(uint256 indexed id, address indexed token);
 
     uint8 internal constant VIA_ISSUER = 0;
     uint8 internal constant VIA_REACTIVE = 1;
@@ -108,6 +119,10 @@ contract HandshakeEscrow is AbstractCallback {
     uint256 public feesCollected;
     /// @notice Sum of all OPEN bounty amounts; the vault balance always equals it (tested as an invariant).
     uint256 public openTotal;
+    /// @notice ERC-20 bounties: the token of bounty id (zero = native ETH) and the open total per token, which the vault's
+    ///         token balance always equals (tested as an invariant).
+    mapping(uint256 => address) public tokenOf;
+    mapping(address => uint256) public openTotalOf;
     uint256 public nextId = 1;
     mapping(uint256 => Bounty) public bounties;
     mapping(uint256 => Condition) public conditions;
@@ -131,13 +146,77 @@ contract HandshakeEscrow is AbstractCallback {
 
     /// @notice Post a bounty paid automatically to whoever the chain proves did the work.
     function postProof(string calldata title_, uint256 deadline_, Condition calldata c_) external payable returns (uint256 id) {
+        _checkCondition(c_);
+        id = _post(Kind.Proof, title_, deadline_);
+        conditions[id] = c_;
+        emit ProofCondition(id, c_.chainId, c_.emitter, c_.topic0, c_.matchTopic1, c_.topic1, c_.winnerTopic, c_.minValue);
+    }
+
+    /// @notice Same as postJudged, paid in an ERC-20 (approve this escrow first). msg.value must equal postFee exactly.
+    function postJudgedToken(string calldata title_, uint256 deadline_, address token_, uint256 amount_)
+        external
+        payable
+        returns (uint256 id)
+    {
+        id = _postToken(Kind.Judged, title_, deadline_, token_, amount_);
+    }
+
+    /// @notice Same as postProof, paid in an ERC-20 (approve this escrow first). msg.value must equal postFee exactly.
+    function postProofToken(string calldata title_, uint256 deadline_, Condition calldata c_, address token_, uint256 amount_)
+        external
+        payable
+        returns (uint256 id)
+    {
+        _checkCondition(c_);
+        id = _postToken(Kind.Proof, title_, deadline_, token_, amount_);
+        conditions[id] = c_;
+        emit ProofCondition(id, c_.chainId, c_.emitter, c_.topic0, c_.matchTopic1, c_.topic1, c_.winnerTopic, c_.minValue);
+    }
+
+    function _postToken(Kind kind_, string calldata title_, uint256 deadline_, address token_, uint256 amount_)
+        internal
+        returns (uint256 id)
+    {
+        if (msg.value != postFee) revert WrongFee(msg.value, postFee);
+        if (token_ == address(0) || token_.code.length == 0 || amount_ == 0) revert BadAmount();
+        if (deadline_ <= block.timestamp || deadline_ > block.timestamp + 365 days) revert BadDeadline();
+        id = nextId++;
+        uint256 before = _balanceOf(token_, address(vault));
+        (bool ok, bytes memory ret) =
+            token_.call(abi.encodeWithSelector(0x23b872dd, msg.sender, address(vault), amount_)); // transferFrom
+        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TokenTransferFailed();
+        uint256 received = _balanceOf(token_, address(vault)) - before; // fee-on-transfer tokens: record what arrived
+        if (received == 0) revert BadAmount();
+        tokenOf[id] = token_;
+        openTotalOf[token_] += received;
+        bounties[id] = Bounty({
+            issuer: payable(msg.sender),
+            deadline: uint96(deadline_),
+            kind: kind_,
+            status: Status.Open,
+            amount: received,
+            winner: address(0),
+            title: title_
+        });
+        if (postFee != 0) {
+            feesCollected += postFee;
+            emit FeeCollected(id, postFee);
+        }
+        emit BountyToken(id, token_);
+        emit BountyPosted(id, msg.sender, uint8(kind_), received, deadline_, title_);
+    }
+
+    function _balanceOf(address token_, address who_) internal view returns (uint256) {
+        (bool ok, bytes memory ret) = token_.staticcall(abi.encodeWithSelector(0x70a08231, who_)); // balanceOf
+        if (!ok || ret.length < 32) revert TokenTransferFailed();
+        return abi.decode(ret, (uint256));
+    }
+
+    function _checkCondition(Condition calldata c_) internal pure {
         if (c_.chainId == 0 || c_.emitter == address(0) || c_.topic0 == 0 || c_.winnerTopic < 1 || c_.winnerTopic > 3) {
             revert BadCondition();
         }
         if (c_.matchTopic1 && c_.winnerTopic == 1) revert BadCondition(); // the winner cannot also be the pinned topic
-        id = _post(Kind.Proof, title_, deadline_);
-        conditions[id] = c_;
-        emit ProofCondition(id, c_.chainId, c_.emitter, c_.topic0, c_.matchTopic1, c_.topic1, c_.winnerTopic, c_.minValue);
     }
 
     function _post(Kind kind_, string calldata title_, uint256 deadline_) internal returns (uint256 id) {
@@ -256,8 +335,14 @@ contract HandshakeEscrow is AbstractCallback {
         b.winner = winner_;
         uint256 amount = b.amount;
         b.amount = 0;
-        openTotal -= amount;
-        vault.release(payable(winner_), amount);
+        address token = tokenOf[id_];
+        if (token == address(0)) {
+            openTotal -= amount;
+            vault.release(payable(winner_), amount);
+        } else {
+            openTotalOf[token] -= amount;
+            vault.releaseToken(token, winner_, amount);
+        }
         emit BountyPaid(id_, winner_, amount, via_, proofTx_);
     }
 
@@ -265,8 +350,14 @@ contract HandshakeEscrow is AbstractCallback {
         b.status = Status.Refunded;
         uint256 amount = b.amount;
         b.amount = 0;
-        openTotal -= amount;
-        vault.release(b.issuer, amount);
+        address token = tokenOf[id_];
+        if (token == address(0)) {
+            openTotal -= amount;
+            vault.release(b.issuer, amount);
+        } else {
+            openTotalOf[token] -= amount;
+            vault.releaseToken(token, b.issuer, amount);
+        }
         emit BountyRefunded(id_, b.issuer, amount, via_);
     }
 }

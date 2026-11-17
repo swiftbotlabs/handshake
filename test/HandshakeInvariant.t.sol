@@ -4,6 +4,7 @@ pragma solidity ^0.8.29;
 import { Test } from "forge-std/Test.sol";
 import { IPayable } from "@reactive/src/interfaces/IPayable.sol";
 import { HandshakeEscrow } from "../src/HandshakeEscrow.sol";
+import { MockUSDC } from "./HandshakeToken.t.sol";
 
 /// Drives the escrow with random sequences: posts of both kinds, claims, accepts, cancels, time jumps, proof and expiry
 /// callbacks from the proxy (duplicates, wrong ids and late ones included), public expire(), and callback-gas bills.
@@ -12,6 +13,9 @@ contract EscrowHandler is Test {
     address public proxy;
     address public rx;
     address[] public actors;
+    MockUSDC public usdc;          // a 1 %-fee-on-transfer USDC look-alike, the nastiest common token shape
+    uint256 public ghostTokenPosted;
+    uint256 public ghostTokenReleased;
     uint256 public ghostPosted;    // all bounty amounts ever posted (fee excluded)
     uint256 public ghostReleased;  // all amounts paid or refunded
     uint256 public ghostFees;
@@ -25,6 +29,7 @@ contract EscrowHandler is Test {
         proxy = proxy_;
         rx = rx_;
         for (uint256 i; i < 4; ++i) actors.push(address(uint160(0xA000 + i)));
+        usdc = new MockUSDC(100);
     }
 
     function _actor(uint256 s) internal view returns (address) {
@@ -46,7 +51,8 @@ contract EscrowHandler is Test {
         _;
         (HandshakeEscrow.Status b,) = _status(id);
         if (a == HandshakeEscrow.Status.Open && b != HandshakeEscrow.Status.Open) {
-            ghostReleased += amt;
+            if (esc.tokenOf(id) == address(0)) ghostReleased += amt;
+            else ghostTokenReleased += amt;
             if (++closeCount[id] > maxCloseCount) maxCloseCount = closeCount[id];
         }
         if (a != HandshakeEscrow.Status.Open && a != HandshakeEscrow.Status.None && b != a) closedBountyChanged = true;
@@ -76,6 +82,28 @@ contract EscrowHandler is Test {
         esc.postProof{ value: value }("p", block.timestamp + dt, c);
         ghostPosted += value - esc.postFee();
         ghostFees += esc.postFee();
+    }
+
+    function postToken(uint256 who, uint256 amount, uint256 dt, bool proof) external {
+        address a = _actor(who);
+        amount = bound(amount, 1e6, 1_000e6);
+        dt = bound(dt, 1, 30 days);
+        uint256 deadline = block.timestamp + dt;
+        uint256 fee = esc.postFee();
+        HandshakeEscrow.Condition memory c = HandshakeEscrow.Condition({
+            chainId: 11155111, emitter: address(0x1234), topic0: 1, matchTopic1: true, topic1: 3, winnerTopic: 2, minValue: 0
+        });
+        usdc.mint(a, amount);
+        vm.deal(a, fee);
+        vm.startPrank(a);
+        usdc.approve(address(esc), amount);
+        uint256 id = proof
+            ? esc.postProofToken{ value: fee }("t", deadline, c, address(usdc), amount)
+            : esc.postJudgedToken{ value: fee }("t", deadline, address(usdc), amount);
+        vm.stopPrank();
+        (,,,, uint256 received,,) = esc.bounties(id);
+        ghostTokenPosted += received;
+        ghostFees += fee;
     }
 
     function claimAndAccept(uint256 s, uint256 who) external tracked(_id(s)) {
@@ -157,8 +185,11 @@ contract HandshakeInvariantTest is Test {
         uint256 sum;
         for (uint256 id = 1; id < esc.nextId(); ++id) {
             (,,, HandshakeEscrow.Status st, uint256 amount,,) = esc.bounties(id);
-            if (st == HandshakeEscrow.Status.Open) sum += amount;
-            else assertEq(amount, 0);
+            if (st == HandshakeEscrow.Status.Open) {
+                if (esc.tokenOf(id) == address(0)) sum += amount;
+            } else {
+                assertEq(amount, 0);
+            }
         }
         assertEq(sum, esc.openTotal());
     }
@@ -172,6 +203,13 @@ contract HandshakeInvariantTest is Test {
     function invariant_neverClosedTwice() public view {
         assertLe(h.maxCloseCount(), 1);
         assertFalse(h.closedBountyChanged());
+    }
+
+    /// ERC-20 books: the vault's token balance always equals the open token bounties, and token money is conserved
+    /// even for a fee-on-transfer token (bounties record what actually arrived).
+    function invariant_tokenBooks() public view {
+        assertEq(h.usdc().balanceOf(address(esc.vault())), esc.openTotalOf(address(h.usdc())));
+        assertEq(h.ghostTokenPosted(), esc.openTotalOf(address(h.usdc())) + h.ghostTokenReleased());
     }
 
     /// Callback gas is billed only from fees, never from bounty money.
