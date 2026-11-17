@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 520" font-family="Inter, Helvetica, Arial, sans-serif">
+  <rect width="960" height="520" fill="#f7f6f2"/>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#1d1d1d"/></marker></defs>
+  <text x="40" y="48" font-size="26" font-weight="700" fill="#1d1d1d">Handshake: bounties that settle themselves</text>
+  <text x="40" y="76" font-size="15" fill="#555">Post once. Reactive pays the first address the chain proves did the work, or refunds you at the deadline.</text>
+  <!-- Base Sepolia -->
+  <rect x="40" y="120" width="270" height="250" rx="14" fill="#fff" stroke="#2f5bea" stroke-width="2"/>
+  <text x="60" y="152" font-size="17" font-weight="700" fill="#2f5bea">Base Sepolia</text>
+  <text x="60" y="180" font-size="15" font-weight="600" fill="#1d1d1d">HandshakeEscrow</text>
+  <text x="60" y="204" font-size="13" fill="#333">postProof / postJudged</text>
+  <text x="60" y="226" font-size="13" fill="#333">settleProof (callback) → pay winner</text>
+  <text x="60" y="248" font-size="13" fill="#333">expireByReactive (callback) → refund</text>
+  <text x="60" y="270" font-size="13" fill="#333">expire(id): anyone, if Reactive is down</text>
+  <rect x="60" y="292" width="230" height="56" rx="10" fill="#eef2ff"/>
+  <text x="74" y="316" font-size="13" font-weight="600" fill="#1d1d1d">BountyVault</text>
+  <text x="74" y="336" font-size="12" fill="#333">bounty money, apart from callback gas</text>
+  <!-- Lasna -->
+  <rect x="345" y="120" width="270" height="250" rx="14" fill="#fff" stroke="#0f9d58" stroke-width="2"/>
+  <text x="365" y="152" font-size="17" font-weight="700" fill="#0f9d58">Reactive Lasna</text>
+  <text x="365" y="180" font-size="15" font-weight="600" fill="#1d1d1d">HandshakeReactive</text>
+  <text x="365" y="204" font-size="13" fill="#333">mirrors bounties from escrow events</text>
+  <text x="365" y="226" font-size="13" fill="#333">subscribes on the fly to each proof</text>
+  <text x="365" y="248" font-size="13" fill="#333">  condition (shared, ref-counted)</text>
+  <text x="365" y="270" font-size="13" fill="#333">first matching log → settleProof</text>
+  <text x="365" y="292" font-size="13" fill="#333">Cron1000 tick → expireByReactive</text>
+  <text x="365" y="314" font-size="13" fill="#333">closed → unsubscribe</text>
+  <!-- Ethereum Sepolia -->
+  <rect x="650" y="120" width="270" height="250" rx="14" fill="#fff" stroke="#8a5cf6" stroke-width="2"/>
+  <text x="670" y="152" font-size="17" font-weight="700" fill="#8a5cf6">Ethereum Sepolia</text>
+  <text x="670" y="180" font-size="15" font-weight="600" fill="#1d1d1d">KeeperJobs (any contract)</text>
+  <text x="670" y="204" font-size="13" fill="#333">run(job 7, work 5)</text>
+  <text x="670" y="226" font-size="13" fill="#333">emits JobRun(job, keeper, work)</text>
+  <text x="670" y="258" font-size="13" fill="#555">The issuer names the event:</text>
+  <text x="670" y="278" font-size="13" fill="#555">chain, contract, topic0, job id,</text>
+  <text x="670" y="298" font-size="13" fill="#555">winner topic, minimum work</text>
+  <!-- arrows -->
+  <line x1="310" y1="190" x2="343" y2="190" stroke="#1d1d1d" stroke-width="2" marker-end="url(#a)"/>
+  <text x="300" y="112" font-size="12" fill="#333">BountyPosted</text>
+  <line x1="650" y1="215" x2="617" y2="215" stroke="#1d1d1d" stroke-width="2" marker-end="url(#a)"/>
+  <text x="600" y="112" font-size="12" fill="#333">JobRun log</text>
+  <path d="M480,372 C480,440 175,440 175,372" fill="none" stroke="#1d1d1d" stroke-width="2" marker-end="url(#a)"/>
+  <text x="235" y="458" font-size="13" fill="#1d1d1d">callback: pay the keeper (measured 2 s from job tx to payout)</text>
+  <text x="40" y="500" font-size="12" fill="#666">Every callback is checked twice: callback proxy + our reactive contract as sender. Late, duplicate or forged callbacks are no-ops.</text>
+</svg>

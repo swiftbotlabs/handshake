@@ -1,0 +1,6 @@
+- 2026-11-17T19:45:18Z A1 postProof job=1794944716 (Base Sepolia) 0x87db67d67cc1c734ef95ba0e005505c04b195e3b5328c88e5f3a3a320f2636fc
+- 2026-11-17T19:46:25Z A2 keeper 0x950B75A737993033108015974dDcDdC39185BBf3 (not the issuer) runs job 1794944716 (Ethereum Sepolia) 0x0f250aa8e33ce6de0f8319f2a6b357028c2121499b1cbaa36c769b3990105151
+- 2026-11-17T19:46:25Z A3 wait for BountyPaid on Base Sepolia (Reactive callback): check 0xb7B6a6E5Fc852FBcC5E62a0db92e0edb6429d769 events
+- 2026-11-17T19:46:28Z B1 postJudged, deadline +20 min (Base Sepolia) 0x0c6c628781eb04f706d5a9d8ac89264f45052872db07c1b7f112c94655c0b7f8; expect BountyRefunded via=1 within ~40 min
+- 2026-11-17T19:47:04Z A3 PAID: BountyPaid id=1 winner=0x950B75A737993033108015974dDcDdC39185BBf3 via=1 (reactive callback) Base Sepolia block 60114588 tx 0xdf48283586407fddb8e1c0c55aeab613dfa862a068bfaaa82f3e01ff56ce1fb7; job run block ts 1794944784 -> paid block ts 1794944786 = 2 s
+- 2026-11-17T19:47:32Z Lasna (reactive): Watching id=1 tx 0xe94253aec7eac2701f3fc456db274ed490765904eb897d14f2fdee777a369375; ProofSeen id=1 winner 0x950B...BBf3 tx 0xaf8f85131db7df89e3da27337dd4e78895ba28f67d99527e03a87530fb772c3b (block 8595062); Closed id=1 tx 0x0082686cd29af2460724d7aec744e4642d0fc1379229d3caa4c199cd20e605f5; Watching id=2 tx 0x367efb9eee3715cc2b041f45d95639fad0f84b2ef3a728f82bb04cb0b9bab118
