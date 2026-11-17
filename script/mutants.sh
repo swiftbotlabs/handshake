@@ -31,6 +31,9 @@ FILES+=("src/HandshakeEscrow.sol")
 NAMES+=("escrow pays a claimant off the allowlist"); PATCHES+=('s/if (restricted\[id_\] \&\& !allowed\[id_\]\[winner_\]) {/if (false) {/'); FILES+=("src/HandshakeEscrow.sol")
 NAMES+=("watcher forwards a front-runner's proof"); PATCHES+=('s/if (restricted\[id\] \&\& !allowed\[id\]\[winner\]) {/if (false) {/'); FILES+=("src/HandshakeReactive.sol")
 NAMES+=("allowlist emitted after the condition"); PATCHES+=('/function postProofFor/,/^    }/ { s/_allow(id, claimants_);/_setCondition(id, c_);/; t; s/_setCondition(id, c_);/_allow(id, claimants_);/ }'); FILES+=("src/HandshakeEscrow.sol")
+NAMES+=("fee sweep ignores the gas floor"); PATCHES+=('s/sent = bal - gasFloor;/sent = bal;/'); FILES+=("src/HandshakeEscrow.sol")
+NAMES+=("fee sweep credits the caller, not the watcher"); PATCHES+=('s/abi.encodeWithSignature("request(address)", _CALLBACK_SENDER)/abi.encodeWithSignature("request(address)", msg.sender)/'); FILES+=("src/HandshakeEscrow.sol")
+NAMES+=("data-word winner accepts a non-address"); PATCHES+=('s/if (raw >> 160 != 0) continue;/\/\/ mutant/'); FILES+=("src/HandshakeReactive.sol")
 killed=0
 for i in "${!NAMES[@]}"; do
   f=${FILES[$i]}

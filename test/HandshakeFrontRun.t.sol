@@ -185,3 +185,82 @@ contract HandshakeFrontRunTest is HandshakeBase {
         rx.setBurnRate(1, 1);
     }
 }
+
+/// Aave v3's LiquidationCall names the liquidator in a NON-indexed data word. winnerTopic 6 (= data word 2) pays the liquidator.
+contract AaveLikePool {
+    event LiquidationCall(
+        address indexed collateralAsset,
+        address indexed debtAsset,
+        address indexed user,
+        uint256 debtToCover,
+        uint256 liquidatedCollateralAmount,
+        address liquidator,
+        bool receiveAToken
+    );
+    function liquidate(address coll, address debt, address user, uint256 cover) external {
+        emit LiquidationCall(coll, debt, user, cover, cover * 105 / 100, msg.sender, false);
+    }
+}
+
+contract HandshakeLiquidationTest is HandshakeBase {
+    AaveLikePool pool;
+    address risky = address(0xDEB7);
+    address liquidator = address(0x11A0);
+
+    function setUp() public override {
+        super.setUp();
+        pool = new AaveLikePool();
+    }
+
+    function _postLiq(uint256 minCover) internal returns (uint256 id) {
+        HandshakeEscrow.Condition memory c = HandshakeEscrow.Condition({
+            chainId: JOBS_CHAIN, emitter: address(pool),
+            topic0: uint256(keccak256("LiquidationCall(address,address,address,uint256,uint256,address,bool)")),
+            matchTopic1: false, topic1: 0, winnerTopic: 6, minValue: minCover
+        });
+        vm.recordLogs();
+        vm.prank(issuer);
+        id = esc.postProof{ value: 1 ether }("liquidate", block.timestamp + 1 days, c);
+        _pipe(vm.getRecordedLogs(), ESCROW_CHAIN);
+    }
+
+    function test_paysTheLiquidatorFromADataWord() public {
+        uint256 id = _postLiq(100);
+        vm.recordLogs();
+        vm.prank(liquidator);
+        pool.liquidate(address(1), address(2), risky, 500);
+        _pipe(vm.getRecordedLogs(), JOBS_CHAIN);
+        _deliverCallbacks();
+        (,,,,, address winner,) = esc.bounties(id);
+        assertEq(winner, liquidator);
+        assertEq(liquidator.balance, 1 ether);
+    }
+
+    function test_smallLiquidationDoesNotPay() public {
+        uint256 id = _postLiq(1000);
+        vm.recordLogs();
+        vm.prank(liquidator);
+        pool.liquidate(address(1), address(2), risky, 999);
+        _pipe(vm.getRecordedLogs(), JOBS_CHAIN);
+        assertEq(sys.payloadCount(), 0);
+        (,,, HandshakeEscrow.Status st,,,) = esc.bounties(id);
+        assertEq(uint8(st), uint8(HandshakeEscrow.Status.Open));
+    }
+
+    function test_dataWordThatIsNotAnAddressIsSkipped() public {
+        // winnerTopic 4 = data word 0 = debtToCover (a big number, not an address): must never pay
+        HandshakeEscrow.Condition memory c = HandshakeEscrow.Condition({
+            chainId: JOBS_CHAIN, emitter: address(pool),
+            topic0: uint256(keccak256("LiquidationCall(address,address,address,uint256,uint256,address,bool)")),
+            matchTopic1: false, topic1: 0, winnerTopic: 4, minValue: 0
+        });
+        vm.recordLogs();
+        vm.prank(issuer);
+        esc.postProof{ value: 1 ether }("x", block.timestamp + 1 days, c);
+        _pipe(vm.getRecordedLogs(), ESCROW_CHAIN);
+        vm.recordLogs();
+        pool.liquidate(address(1), address(2), risky, 2 ** 200 + 1234);
+        _pipe(vm.getRecordedLogs(), JOBS_CHAIN);
+        assertEq(sys.payloadCount(), 0);
+    }
+}

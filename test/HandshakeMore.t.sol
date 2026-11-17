@@ -23,7 +23,7 @@ contract HandshakeRulesTest is HandshakeBase {
 
     function setUp() public override {
         super.setUp();
-        feeEsc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), MIN, FEE);
+        feeEsc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), MIN, FEE, address(0), 0);
     }
 
     function _cond() internal view returns (HandshakeEscrow.Condition memory c) {
@@ -88,13 +88,13 @@ contract HandshakeRulesTest is HandshakeBase {
     }
 
     // ---- condition shape
-    function test_rejectsWinnerTopicZeroAndFour() public {
+    function test_rejectsWinnerTopicZeroAndTwelve() public {
         HandshakeEscrow.Condition memory c = _cond();
         vm.startPrank(issuer);
         c.winnerTopic = 0;
         vm.expectRevert(HandshakeEscrow.BadCondition.selector);
         esc.postProof{ value: 1 ether }("x", block.timestamp + 1 days, c);
-        c.winnerTopic = 4;
+        c.winnerTopic = 12; // 1-3 topics, 4-11 data words
         vm.expectRevert(HandshakeEscrow.BadCondition.selector);
         esc.postProof{ value: 1 ether }("x", block.timestamp + 1 days, c);
         vm.stopPrank();
@@ -266,7 +266,7 @@ contract HandshakeFuzzTest is HandshakeBase {
     function testFuzz_feeSplitIsExact(uint96 value, uint64 fee) public {
         uint256 f = uint256(fee) % 1 ether;
         uint256 v = bound(uint256(value), f + 1, 100 ether);
-        HandshakeEscrow e = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 1, f);
+        HandshakeEscrow e = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 1, f, address(0), 0);
         vm.deal(issuer, v);
         vm.prank(issuer);
         uint256 id = e.postJudged{ value: v }("x", block.timestamp + 1 days);

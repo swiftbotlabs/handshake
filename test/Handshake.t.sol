@@ -64,7 +64,7 @@ abstract contract HandshakeBase is Test {
         vm.etch(SYS, address(impl).code);
         sys = MockSystem(payable(SYS));
         rx = new HandshakeReactive();
-        esc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 1, 0);
+        esc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 1, 0, address(0), 0);
         jobs = new KeeperJobs();
         rx.linkEscrow(ESCROW_CHAIN, address(esc));
         vm.deal(issuer, 10 ether);

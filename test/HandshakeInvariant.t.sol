@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { IPayable } from "@reactive/src/interfaces/IPayable.sol";
 import { HandshakeEscrow } from "../src/HandshakeEscrow.sol";
 import { MockUSDC } from "./HandshakeToken.t.sol";
+import { MockReactFunder } from "./HandshakeFees.t.sol";
 
 /// Drives the escrow with random sequences: posts of both kinds, claims, accepts, cancels, time jumps, proof and expiry
 /// callbacks from the proxy (duplicates, wrong ids and late ones included), public expire(), and callback-gas bills.
@@ -175,6 +176,10 @@ contract EscrowHandler is Test {
         vm.warp(block.timestamp + bound(dt, 1, 10 days));
     }
 
+    function fundReactive() external {
+        esc.fundReactive();
+    }
+
     function billCallbackGas(uint256 amount) external {
         uint256 avail = address(esc).balance;
         if (avail == 0) return;
@@ -193,7 +198,8 @@ contract HandshakeInvariantTest is Test {
 
     function setUp() public {
         vm.warp(1_800_000_000);
-        esc = new HandshakeEscrow(IPayable(payable(proxy)), rx, 0.001 ether, 0.0002 ether);
+        MockReactFunder funder = new MockReactFunder();
+        esc = new HandshakeEscrow(IPayable(payable(proxy)), rx, 0.001 ether, 0.0002 ether, address(funder), 0.0006 ether);
         h = new EscrowHandler(esc, proxy, rx);
         targetContract(address(h));
     }
@@ -240,9 +246,9 @@ contract HandshakeInvariantTest is Test {
         assertEq(h.ghostTokenPosted(), esc.openTotalOf(address(h.usdc())) + h.ghostTokenReleased());
     }
 
-    /// Callback gas is billed only from fees, never from bounty money.
+    /// Callback gas and REACT are paid only from fees, never from bounty money.
     function invariant_feesFundGasOnly() public view {
-        assertEq(address(esc).balance, h.ghostFees() - h.ghostBilled());
+        assertEq(address(esc).balance, h.ghostFees() - h.ghostBilled() - esc.feesToReact());
         assertEq(esc.feesCollected(), h.ghostFees());
     }
 }

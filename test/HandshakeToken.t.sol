@@ -42,7 +42,7 @@ contract HandshakeTokenTest is HandshakeBase {
         usdc.mint(issuer, 1_000e6);
         vm.prank(issuer);
         usdc.approve(address(esc), type(uint256).max);
-        tEsc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 0.001 ether, FEE);
+        tEsc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 0.001 ether, FEE, address(0), 0);
         vm.prank(issuer);
         usdc.approve(address(tEsc), type(uint256).max);
     }

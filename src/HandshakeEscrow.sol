@@ -47,7 +47,9 @@ contract HandshakeEscrow is AbstractCallback {
     enum Status { None, Open, Paid, Refunded }
 
     /// @notice What a PROOF bounty waits for: a log on `chainId` from `emitter` with `topic0`, optionally pinned on topic1,
-    ///         whose topic number `winnerTopic` (1-3) holds the address to pay, and whose first data word is >= minValue.
+    ///         whose `winnerTopic` holds the address to pay, and whose first data word is >= minValue.
+    ///         winnerTopic 1-3 = indexed topic 1-3; 4-11 = non-indexed data word 0-7 (e.g. Aave's LiquidationCall names the
+    ///         liquidator in data word 2, so winnerTopic 6 pays whoever liquidates the watched position).
     struct Condition {
         uint256 chainId;
         address emitter;
@@ -108,6 +110,8 @@ contract HandshakeEscrow is AbstractCallback {
     event FeeCollected(uint256 indexed id, uint256 fee);
     /// @notice An ERC-20 bounty (e.g. USDC). BountyPosted carries the token amount actually received by the vault.
     event BountyToken(uint256 indexed id, address indexed token);
+    /// @notice Surplus posting fees bought REACT for the watcher (sent to `reactFunder` for the reactive contract's address).
+    event ReactFunded(address indexed reactive, uint256 amount);
     /// @notice Anti-front-running: once a PROOF bounty has any allowed claimant, only proofs that name an allowed address
     ///         pay. A bot that copies the claimant's job tx gets itself named in the log, so it is ignored (by the reactive
     ///         contract, which mirrors this event, and again here). Emitted before ProofCondition when posted together.
@@ -122,6 +126,13 @@ contract HandshakeEscrow is AbstractCallback {
     /// @notice Flat fee per posted bounty, kept as callback gas (see FeeCollected). Bounty amount = msg.value - postFee.
     uint256 public immutable postFee;
     uint256 public feesCollected;
+    /// @notice Fees -> REACT: a contract with `request(address)` payable that credits REACT to that address on Reactive Network
+    ///         (Reactive's own faucet contract on the testnets; on mainnet whatever REACT on-ramp exists). Zero = off.
+    address public immutable reactFunder;
+    /// @notice Callback gas the escrow always keeps for itself; only fees above it are sent on to buy REACT.
+    uint256 public immutable gasFloor;
+    /// @notice Fees already sent on to buy REACT for the watcher.
+    uint256 public feesToReact;
     /// @notice Sum of all OPEN bounty amounts; the vault balance always equals it (tested as an invariant).
     uint256 public openTotal;
     /// @notice ERC-20 bounties: the token of bounty id (zero = native ETH) and the open total per token, which the vault's
@@ -136,13 +147,38 @@ contract HandshakeEscrow is AbstractCallback {
     mapping(uint256 => bool) public restricted;
     mapping(uint256 => mapping(address => bool)) public allowed;
 
-    constructor(IPayable callbackProxy_, address reactive_, uint256 minBounty_, uint256 postFee_)
-        payable
-        AbstractCallback(callbackProxy_, reactive_)
-    {
+    constructor(
+        IPayable callbackProxy_,
+        address reactive_,
+        uint256 minBounty_,
+        uint256 postFee_,
+        address reactFunder_,
+        uint256 gasFloor_
+    ) payable AbstractCallback(callbackProxy_, reactive_) {
         vault = new BountyVault();
         minBounty = minBounty_ == 0 ? 1 : minBounty_;
         postFee = postFee_;
+        reactFunder = reactFunder_;
+        gasFloor = gasFloor_;
+    }
+
+    /// @notice Anyone may call: every wei of this contract's balance above `gasFloor` is posting-fee income (bounty money lives in
+    ///         the vault), and it goes to `reactFunder`, which credits REACT to the reactive contract on Reactive Network. So the
+    ///         people who post bounties pay for the watcher too. Also runs by itself on a post once the surplus reaches 10 fees.
+    ///         Never reverts: a failing funder leaves the money here as callback gas.
+    function fundReactive() public returns (uint256 sent) {
+        if (reactFunder == address(0)) return 0;
+        uint256 bal = address(this).balance;
+        if (bal <= gasFloor) return 0;
+        sent = bal - gasFloor;
+        (bool ok,) = reactFunder.call{ value: sent }(abi.encodeWithSignature("request(address)", _CALLBACK_SENDER));
+        if (!ok) return 0;
+        feesToReact += sent;
+        emit ReactFunded(_CALLBACK_SENDER, sent);
+    }
+
+    function _autoFund() internal {
+        if (reactFunder != address(0) && postFee != 0 && address(this).balance >= gasFloor + 10 * postFee) fundReactive();
     }
 
     // ------------------------------------------------------------------ posting
@@ -266,6 +302,7 @@ contract HandshakeEscrow is AbstractCallback {
         }
         emit BountyToken(id, token_);
         emit BountyPosted(id, msg.sender, uint8(kind_), received, deadline_, title_);
+        _autoFund();
     }
 
     function _balanceOf(address token_, address who_) internal view returns (uint256) {
@@ -275,7 +312,7 @@ contract HandshakeEscrow is AbstractCallback {
     }
 
     function _checkCondition(Condition calldata c_) internal pure {
-        if (c_.chainId == 0 || c_.emitter == address(0) || c_.topic0 == 0 || c_.winnerTopic < 1 || c_.winnerTopic > 3) {
+        if (c_.chainId == 0 || c_.emitter == address(0) || c_.topic0 == 0 || c_.winnerTopic < 1 || c_.winnerTopic > 11) {
             revert BadCondition();
         }
         if (c_.matchTopic1 && c_.winnerTopic == 1) revert BadCondition(); // the winner cannot also be the pinned topic
@@ -304,6 +341,7 @@ contract HandshakeEscrow is AbstractCallback {
             emit FeeCollected(id, postFee);
         }
         emit BountyPosted(id, msg.sender, uint8(kind_), amount, deadline_, title_);
+        _autoFund();
     }
 
     // ------------------------------------------------------------------ judged flow

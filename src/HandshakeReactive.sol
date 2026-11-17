@@ -240,12 +240,20 @@ contract HandshakeReactive is AbstractReactive {
             if (!w.open || block.timestamp >= w.deadline) continue;
             if (w.requestedAt != 0 && block.timestamp < w.requestedAt + RETRY_AFTER) continue; // one in flight
             Condition storage c = conditions[id];
-            if (log_.opCode <= c.winnerTopic) continue; // the log has no such topic
+            uint256 raw;
+            if (c.winnerTopic <= 3) {
+                if (log_.opCode <= c.winnerTopic) continue; // the log has no such topic
+                raw = c.winnerTopic == 1 ? log_.topic1 : (c.winnerTopic == 2 ? log_.topic2 : log_.topic3);
+            } else {
+                uint256 w = uint256(c.winnerTopic - 4) * 32; // a non-indexed data word, e.g. Aave's liquidator
+                if (log_.data.length < w + 32) continue;
+                raw = abi.decode(log_.data[w:w + 32], (uint256));
+                if (raw >> 160 != 0) continue; // not an address
+            }
             if (c.minValue != 0) {
                 if (log_.data.length < 32) continue;
                 if (abi.decode(log_.data[:32], (uint256)) < c.minValue) continue;
             }
-            uint256 raw = c.winnerTopic == 1 ? log_.topic1 : (c.winnerTopic == 2 ? log_.topic2 : log_.topic3);
             address winner = address(uint160(raw));
             if (winner == address(0)) continue;
             if (restricted[id] && !allowed[id][winner]) {

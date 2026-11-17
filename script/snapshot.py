@@ -93,7 +93,7 @@ def main():
         if x["allowed"]: meta.append("only for " + ", ".join(f'<span class="mono">{short(a)}</span>' for a in x["allowed"]))
         if x["winner"]: meta.append(f'<span class="mono">winner {x["winner"]}</span>')
         if x["tx"]: meta.append(f'<a href="{EXPLORER}/tx/{x["tx"]}">{"payout" if x["status"] == "paid" else "refund"} tx</a>')
-        out.append(f'<div class="b"><span class="n">#{x["id"]}</span><span class="t">{html.escape(x["title"] or "(untitled)")}</span>'
+        out.append(f'<div class="b"><span class="n">{x["ver"]}·{x["id"]}</span><span class="t">{html.escape(x["title"] or "(untitled)")}</span>'
                    f'<span class="pill {x["status"]}">{x["status"]}</span><span class="m">{" · ".join(meta)}</span></div>')
     if "v4" in runway:
         fu, bal = runway["v4"]

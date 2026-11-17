@@ -20,7 +20,7 @@ input,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-
 input:focus,select:focus,button:focus-visible{outline:3px solid #e0572b55;outline-offset:1px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:560px){.row{grid-template-columns:1fr}}
 .hint{color:var(--muted);font-size:14px;margin:6px 0 0;overflow-wrap:anywhere}
-.b{display:grid;grid-template-columns:44px 1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:start}
+.b{display:grid;grid-template-columns:52px 1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:start}
 .b .n{font:600 15px var(--mono);color:var(--muted)}.b .t{font-weight:600}.b .m{grid-column:2/4;color:var(--muted);font-size:14px;overflow-wrap:anywhere}
 .sum{overflow-wrap:anywhere;font-family:var(--mono);font-size:14px;background:#FAF9F6;border:1px dashed var(--line);border-radius:10px;padding:12px;margin:16px 0;white-space:pre-wrap}
 button.go{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:13px 18px;font:600 16px var(--font);cursor:pointer}
@@ -66,13 +66,20 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
       </div>
       <label for="csig">Event signature</label><input id="csig" placeholder="Transfer(address,address,uint256)" spellcheck="false">
       <div class="row">
-        <div><label for="cwin">Winner is indexed topic</label><select id="cwin"><option>1</option><option selected>2</option><option>3</option></select></div>
+        <div><label for="cwin">Winner is indexed topic</label><select id="cwin">
+          <option value="1">topic 1</option>
+          <option value="2" selected>topic 2</option>
+          <option value="3">topic 3</option>
+        </select></div>
         <div><label for="cpin">Pin topic 1 to (optional)</label><input id="cpin" placeholder="number or 0x…" spellcheck="false"></div>
       </div>
       <label for="cmin">First data word at least</label><input id="cmin" inputmode="numeric" value="0">
     </div>
     <div class="row">
-      <div><label for="reward">Reward</label><div style="display:flex;gap:8px"><input id="reward" inputmode="decimal" value="0.0005"><select id="cur" style="width:110px" aria-label="Currency"><option>ETH</option><option>USDC</option></select></div></div>
+      <div><label for="reward">Reward</label><div style="display:flex;gap:8px"><input id="reward" inputmode="decimal" value="0.0005"><select id="cur" style="width:110px" aria-label="Currency">
+          <option value="ETH">ETH</option>
+          <option value="USDC">USDC</option>
+        </select></div></div>
       <div><label for="hours">Deadline (hours from now)</label><input id="hours" inputmode="numeric" value="24"></div>
     </div>
     <div id="fonly">
@@ -184,7 +191,7 @@ async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBount
     if(x.tx)m.push(`<a href="${CFG.explorer}/tx/${x.tx}">${x.st==='paid'?'payout':'refund'} tx</a>`);
     const act=claimAction(x),key=x.ver+'_'+x.id;if(act){ACTS[key]={...act,only:x.only};
       m.push(`<button type="button" class="ghost" style="margin-top:8px" onclick="claim('${key}')">${esc(act.label)}</button> <span id="c${key}" role="status"></span>`)}
-    return `<div class="b"><span class="n">#${x.id}</span><span class="t">${esc(x.title||'(untitled)')}</span><span class="pill ${x.st}">${x.st}</span><span class="m">${m.join(' · ')}</span></div>`}).join('')||'<p class="hint">No bounties yet.</p>'}
+    return `<div class="b"><span class="n">${x.ver}·${x.id}</span><span class="t">${esc(x.title||'(untitled)')}</span><span class="pill ${x.st}">${x.st}</span><span class="m">${m.join(' · ')}</span></div>`}).join('')||'<p class="hint">No bounties yet.</p>'}
   catch(e){/* keep the server-side snapshot */ $('#list').insertAdjacentHTML('afterbegin',`<p class="hint">Live refresh failed (${esc(e.shortMessage||e.message)}); showing the snapshot.</p>`)}}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function say(t,cls){$('#status').textContent=t;$('#status').className=cls||''}
