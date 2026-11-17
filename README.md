@@ -66,7 +66,13 @@ Proof loop, end to end:
 4. The callback pays the keeper 0.0005 ETH on Base Sepolia (`BountyPaid`, via reactive):
    [0xdf482835…](https://sepolia.basescan.org/tx/0xdf48283586407fddb8e1c0c55aeab613dfa862a068bfaaa82f3e01ff56ce1fb7)
 
-Measured: **2 seconds** from the job transaction's block to the payout's block.
+Measured from block timestamps (`./script/latency.sh`, reproducible from any RPC):
+
+| Step | Chain | Block | Block time (UTC) |
+|---|---|---|---|
+| Keeper runs the job | Ethereum Sepolia | 12156559 | 19:46:24 |
+| `react()` sees the log, requests the payout | Reactive Lasna | 8595062 | 19:46:24 |
+| `BountyPaid` callback | Base Sepolia | 60114588 | 19:46:26 (**+2 s**) |
 Dynamic subscription: subscribe [0xe94253ae…](https://lasna.reactscan.net/tx/0xe94253aec7eac2701f3fc456db274ed490765904eb897d14f2fdee777a369375),
 close and unsubscribe [0x0082686c…](https://lasna.reactscan.net/tx/0x0082686cd29af2460724d7aec744e4642d0fc1379229d3caa4c199cd20e605f5).
 

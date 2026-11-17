@@ -1,3 +1,9 @@
+# Handshake testnet run, 17 Nov 2026
+Times at the start of each line are when the script or I WROTE the line (wall clock of the logging machine, sometimes minutes later),
+not chain time. For latency use block timestamps: `./script/latency.sh <job tx> <lasna tx> <payout tx>`.
+Proof loop by block timestamp: job tx Sepolia block 12156559 at 19:46:24 UTC -> ProofSeen Lasna block 8595062 at 19:46:24 UTC ->
+BountyPaid Base Sepolia block 60114588 at 19:46:26 UTC (+2 s). Deadline loop: refund Base Sepolia block 60124851 at 20:20:39 UTC.
+
 - 2026-11-17T19:45:18Z A1 postProof job=1794944716 (Base Sepolia) 0x87db67d67cc1c734ef95ba0e005505c04b195e3b5328c88e5f3a3a320f2636fc
 - 2026-11-17T19:46:25Z A2 keeper 0x950B75A737993033108015974dDcDdC39185BBf3 (not the issuer) runs job 1794944716 (Ethereum Sepolia) 0x0f250aa8e33ce6de0f8319f2a6b357028c2121499b1cbaa36c769b3990105151
 - 2026-11-17T19:46:25Z A3 wait for BountyPaid on Base Sepolia (Reactive callback): check 0xb7B6a6E5Fc852FBcC5E62a0db92e0edb6429d769 events
