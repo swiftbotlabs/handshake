@@ -42,7 +42,7 @@ contract MockSystem {
     receive() external payable {}
 }
 
-contract HandshakeTest is Test {
+abstract contract HandshakeBase is Test {
     address constant SYS = 0x8888888888888888888888888888888888888888;
     address constant CRON_SRC = 0x0000000000000000000000000000000000fffFfF;
     uint256 constant CRON1000 = 0xe20b31294d84c3661ddc8f423abb9c70310d0cf172aa2714ead78029b325e3f4;
@@ -59,12 +59,12 @@ contract HandshakeTest is Test {
     address hunter = address(0xB0B);
     address keeper = address(0xCAFE);
 
-    function setUp() public {
+    function setUp() public virtual {
         MockSystem impl = new MockSystem();
         vm.etch(SYS, address(impl).code);
         sys = MockSystem(payable(SYS));
         rx = new HandshakeReactive();
-        esc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx));
+        esc = new HandshakeEscrow(IPayable(payable(proxy)), address(rx), 1, 0);
         jobs = new KeeperJobs();
         rx.linkEscrow(ESCROW_CHAIN, address(esc));
         vm.deal(issuer, 10 ether);
@@ -122,7 +122,9 @@ contract HandshakeTest is Test {
         _pipe(vm.getRecordedLogs(), ESCROW_CHAIN);
     }
 
-    // ---- tests
+}
+
+contract HandshakeTest is HandshakeBase {
     function test_proofBountyPaysFirstKeeperAcrossChains() public {
         uint256 id = _postProof(7, 3, 1 ether, block.timestamp + 2 days);
         assertTrue(sys.isLive(JOBS_CHAIN, address(jobs), uint256(keccak256("JobRun(uint256,address,uint256)")), 7));

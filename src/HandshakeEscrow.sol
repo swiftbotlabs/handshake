@@ -68,6 +68,7 @@ contract HandshakeEscrow is AbstractCallback {
     error BadCondition();
     error UnknownClaim();
     error TooEarly(uint256 id, uint256 deadline, uint256 nowTs);
+    error BelowMinimum(uint256 sent, uint256 required);
 
     event BountyPosted(
         uint256 indexed id,
@@ -92,18 +93,33 @@ contract HandshakeEscrow is AbstractCallback {
     event BountyPaid(uint256 indexed id, address indexed winner, uint256 amount, uint8 indexed via, bytes32 proofTx);
     event BountyRefunded(uint256 indexed id, address indexed issuer, uint256 amount, uint8 indexed via);
     event CallbackSkipped(uint256 indexed id, string reason);
+    /// @notice The posting fee stays in this contract's own balance, the gas float the callback proxy bills for every
+    ///         settleProof / expireByReactive delivered here. Spam therefore pays for the callbacks it causes.
+    event FeeCollected(uint256 indexed id, uint256 fee);
 
     uint8 internal constant VIA_ISSUER = 0;
     uint8 internal constant VIA_REACTIVE = 1;
 
     BountyVault public immutable vault;
+    /// @notice Smallest bounty accepted (anti-spam: each open bounty costs the network a subscription and a cron check).
+    uint256 public immutable minBounty;
+    /// @notice Flat fee per posted bounty, kept as callback gas (see FeeCollected). Bounty amount = msg.value - postFee.
+    uint256 public immutable postFee;
+    uint256 public feesCollected;
+    /// @notice Sum of all OPEN bounty amounts; the vault balance always equals it (tested as an invariant).
+    uint256 public openTotal;
     uint256 public nextId = 1;
     mapping(uint256 => Bounty) public bounties;
     mapping(uint256 => Condition) public conditions;
     mapping(uint256 => address[]) internal _claimants;
 
-    constructor(IPayable callbackProxy_, address reactive_) payable AbstractCallback(callbackProxy_, reactive_) {
+    constructor(IPayable callbackProxy_, address reactive_, uint256 minBounty_, uint256 postFee_)
+        payable
+        AbstractCallback(callbackProxy_, reactive_)
+    {
         vault = new BountyVault();
+        minBounty = minBounty_ == 0 ? 1 : minBounty_;
+        postFee = postFee_;
     }
 
     // ------------------------------------------------------------------ posting
@@ -126,20 +142,27 @@ contract HandshakeEscrow is AbstractCallback {
 
     function _post(Kind kind_, string calldata title_, uint256 deadline_) internal returns (uint256 id) {
         if (msg.value == 0) revert BadAmount();
+        if (msg.value < minBounty + postFee) revert BelowMinimum(msg.value, minBounty + postFee);
         if (deadline_ <= block.timestamp || deadline_ > block.timestamp + 365 days) revert BadDeadline();
         id = nextId++;
-        (bool ok,) = payable(address(vault)).call{ value: msg.value }("");
+        uint256 amount = msg.value - postFee;
+        (bool ok,) = payable(address(vault)).call{ value: amount }("");
         if (!ok) revert TransferFailed();
+        openTotal += amount;
         bounties[id] = Bounty({
             issuer: payable(msg.sender),
             deadline: uint96(deadline_),
             kind: kind_,
             status: Status.Open,
-            amount: msg.value,
+            amount: amount,
             winner: address(0),
             title: title_
         });
-        emit BountyPosted(id, msg.sender, uint8(kind_), msg.value, deadline_, title_);
+        if (postFee != 0) {
+            feesCollected += postFee;
+            emit FeeCollected(id, postFee);
+        }
+        emit BountyPosted(id, msg.sender, uint8(kind_), amount, deadline_, title_);
     }
 
     // ------------------------------------------------------------------ judged flow
@@ -233,6 +256,7 @@ contract HandshakeEscrow is AbstractCallback {
         b.winner = winner_;
         uint256 amount = b.amount;
         b.amount = 0;
+        openTotal -= amount;
         vault.release(payable(winner_), amount);
         emit BountyPaid(id_, winner_, amount, via_, proofTx_);
     }
@@ -241,6 +265,7 @@ contract HandshakeEscrow is AbstractCallback {
         b.status = Status.Refunded;
         uint256 amount = b.amount;
         b.amount = 0;
+        openTotal -= amount;
         vault.release(b.issuer, amount);
         emit BountyRefunded(id_, b.issuer, amount, via_);
     }
