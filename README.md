@@ -28,7 +28,9 @@ Handshake turns both into event-driven logic on Reactive Network, so a bounty ne
 Two kinds of bounty:
 
 - **Proof bounty.** The issuer names an event as the condition: chain, contract, topic0, an optional pinned topic1 (for example
-  the job id), which topic holds the winner, and a minimum value. Example: `JobRun(jobId = 7, keeper, work >= 3)` on Ethereum
+  the job id), where the winner's address sits (indexed topic 1-3, or non-indexed data word 0-7), and a minimum value. The data-word
+  option covers events like Aave v3's `LiquidationCall`, which names the liquidator in data word 2: "pay whoever liquidates this
+  position" is `winnerTopic = 6`. Example: `JobRun(jobId = 7, keeper, work >= 3)` on Ethereum
   Sepolia. The first matching log pays the address in the named topic, on Base Sepolia.
 - **Judged bounty.** The issuer accepts a claim and it pays out at once. If nobody is accepted by the deadline, the issuer is
   refunded automatically.
@@ -168,10 +170,14 @@ public `expire()`. It returns "unbounded" while the cron is off, because nothing
 front-run run above used 0.144 lREACT for about 9 reactions (3 escrow events, 5 WETH deposits seen in the minute the wildcard subscription
 was live, 1 close), about 0.016 lREACT per reaction including the callback request.
 
-**Fees to REACT.** The posting fee is collected in ETH on the escrow chain, where it pays callback gas. REACT lives on Reactive Network,
-and no contract can move value between the two without a bridge, so today the operator sweeps fee income into REACT by hand and tops
-up the reactive contract (anyone can). At 0.016 REACT per reaction and about 5 reactions per pinned-topic bounty, one 0.00002 ETH posting
-fee buys far more REACT than a bounty uses at 17 Nov prices.
+**Fees to REACT, on chain (v5).** The posting fee is collected in ETH on the escrow chain. The escrow keeps a fixed `gasFloor` for callback
+gas, and everything above it is fee income: `fundReactive()` (anyone may call it, and it also runs by itself once 10 fees have piled up)
+sends that surplus to `reactFunder`, which credits REACT to the reactive contract's address on Reactive Network. On the testnets
+`reactFunder` is Reactive's own faucet contract on Base Sepolia (`0x2afaFD298b23b62760711756088F75B7409f5967`, 1 ETH = 100 lREACT), so the
+people who post bounties pay for the watcher with nobody in the loop. Bounty money can't reach it (it lives in the vault), and a failing
+funder never blocks a post (the money just stays as callback gas). On mainnet `reactFunder` points at whatever ETH-to-REACT on-ramp exists;
+until then it is set to zero and the operator tops up by hand. At ~0.016 REACT per reaction and about 5 reactions per pinned-topic bounty,
+one 0.00002 ETH fee buys far more REACT than its bounty uses.
 
 ## Post one without writing code
 

@@ -66,10 +66,14 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
       </div>
       <label for="csig">Event signature</label><input id="csig" placeholder="Transfer(address,address,uint256)" spellcheck="false">
       <div class="row">
-        <div><label for="cwin">Winner is indexed topic</label><select id="cwin">
-          <option value="1">topic 1</option>
-          <option value="2" selected>topic 2</option>
-          <option value="3">topic 3</option>
+        <div><label for="cwin">Winner's address is in</label><select id="cwin">
+          <option value="1">indexed topic 1</option>
+          <option value="2" selected>indexed topic 2</option>
+          <option value="3">indexed topic 3</option>
+          <option value="4">data word 0</option>
+          <option value="5">data word 1</option>
+          <option value="6">data word 2 (e.g. Aave liquidator)</option>
+          <option value="7">data word 3</option>
         </select></div>
         <div><label for="cpin">Pin topic 1 to (optional)</label><input id="cpin" placeholder="number or 0x…" spellcheck="false"></div>
       </div>
@@ -141,10 +145,10 @@ const usdc=()=>$('#cur').value==='USDC';
 function rewardUnits(){return usdc()?ethers.parseUnits($('#reward').value||'0',6):ethers.parseEther($('#reward').value||'0')}
 function value(){return usdc()?fee:rewardUnits()+fee}
 function summary(){try{const v=value(),c=tpl==='judged'?null:condition();
-  $('#sum').textContent=(usdc()?`You send ${$('#reward').value} USDC (approve + post, two signatures) and a posting fee of ${ethers.formatEther(fee)} ETH (pays the callback gas).\n`:
-   `You send ${ethers.formatEther(v)} ETH = reward ${$('#reward').value} + posting fee ${ethers.formatEther(fee)} (pays the callback gas).\nMinimum reward ${ethers.formatEther(minB)} ETH. `)+
+  $('#sum').textContent=(usdc()?`You send ${$('#reward').value} USDC (approve + post, two signatures) and a posting fee of ${ethers.formatEther(fee)} ETH (pays callback gas; the surplus buys the watcher's REACT).\n`:
+   `You send ${ethers.formatEther(v)} ETH = reward ${$('#reward').value} + posting fee ${ethers.formatEther(fee)} (pays callback gas; the surplus buys the watcher's REACT).\nMinimum reward ${ethers.formatEther(minB)} ETH. `)+
    `Deadline in ${$('#hours').value} h; unclaimed money comes back to you by itself.`+
-   (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = topic ${c[5]}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`+($('#only').value.trim()?`\nOnly pays ${$('#only').value.trim()}; a proof naming anyone else is ignored.`:'\nAnyone may be paid (first valid proof wins).'):'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
+   (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = ${c[5]<=3?'topic '+c[5]:'data word '+(c[5]-4)}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`+($('#only').value.trim()?`\nOnly pays ${$('#only').value.trim()}; a proof naming anyone else is ignored.`:'\nAnyone may be paid (first valid proof wins).'):'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
   catch(e){$('#sum').textContent=e.message}}
 document.querySelectorAll('#f input,#f select').forEach(i=>i.addEventListener('input',summary));
 const TOP={posted:ethers.id('BountyPosted(uint256,address,uint8,uint256,uint256,string)'),token:ethers.id('BountyToken(uint256,address)'),
