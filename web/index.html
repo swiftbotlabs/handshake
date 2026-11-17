@@ -72,7 +72,7 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
       <label for="cmin">First data word at least</label><input id="cmin" inputmode="numeric" value="0">
     </div>
     <div class="row">
-      <div><label for="reward">Reward (ETH)</label><input id="reward" inputmode="decimal" value="0.0005"></div>
+      <div><label for="reward">Reward</label><div style="display:flex;gap:8px"><input id="reward" inputmode="decimal" value="0.0005"><select id="cur" style="width:110px" aria-label="Currency"><option>ETH</option><option>USDC</option></select></div></div>
       <div><label for="hours">Deadline (hours from now)</label><input id="hours" inputmode="numeric" value="24"></div>
     </div>
     <div class="sum" id="sum" aria-live="polite"></div>
@@ -91,10 +91,12 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js" crossorigin="anonymous"></script>
 <script>
-const CFG={escrow:'0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802',chainId:84532,rpc:'https://base-sepolia-rpc.publicnode.com',
+const CFG={escrow:'0xf45D582Edbf7dB418b32C6cdA13D16ff57Cae7A2',usdc:'0x036CbD53842c5426634e7929541eC2318f3dCF7e',chainId:84532,rpc:'https://base-sepolia-rpc.publicnode.com',
   jobs:'0xc964f01ed8087f51b6DD1F6434bd268176Fbf212',weth:'0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',origin:11155111,
-  explorer:'https://sepolia.basescan.org',fromBlock:60132600};
+  explorer:'https://sepolia.basescan.org',fromBlock:60146552};
 const ABI=['function postProof(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256)) payable returns (uint256)',
+  'function postProofToken(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256),address,uint256) payable returns (uint256)',
+  'function postJudgedToken(string,uint256,address,uint256) payable returns (uint256)','function tokenOf(uint256) view returns (address)',
   'function postJudged(string,uint256) payable returns (uint256)','function minBounty() view returns (uint256)','function postFee() view returns (uint256)',
   'function nextId() view returns (uint256)','function bounties(uint256) view returns (address,uint96,uint8,uint8,uint256,address,string)'];
 const $=s=>document.querySelector(s); let tpl='job', signer=null, fee=0n, minB=1n;
@@ -111,10 +113,13 @@ function condition(){
   const sig=$('#csig').value.trim().replace(/\s+/g,'');if(!/^[A-Za-z_][A-Za-z0-9_]*\(.*\)$/.test(sig))throw new Error('Event signature looks wrong, e.g. Transfer(address,address,uint256)');
   const addr=ethers.getAddress($('#caddr').value.trim());const pin=$('#cpin').value.trim();
   return [BigInt($('#cchain').value),addr,BigInt(ethers.id(sig)),pin!=='',pin===''?0n:BigInt(pin),Number($('#cwin').value),BigInt($('#cmin').value||'0')]}
-function value(){return ethers.parseEther($('#reward').value||'0')+fee}
+const usdc=()=>$('#cur').value==='USDC';
+function rewardUnits(){return usdc()?ethers.parseUnits($('#reward').value||'0',6):ethers.parseEther($('#reward').value||'0')}
+function value(){return usdc()?fee:rewardUnits()+fee}
 function summary(){try{const v=value(),c=tpl==='judged'?null:condition();
-  $('#sum').textContent=`You send ${ethers.formatEther(v)} ETH = reward ${$('#reward').value} + posting fee ${ethers.formatEther(fee)} (pays the callback gas).\n`+
-   `Minimum reward ${ethers.formatEther(minB)} ETH. Deadline in ${$('#hours').value} h; unclaimed money comes back to you by itself.`+
+  $('#sum').textContent=(usdc()?`You send ${$('#reward').value} USDC (approve + post, two signatures) and a posting fee of ${ethers.formatEther(fee)} ETH (pays the callback gas).\n`:
+   `You send ${ethers.formatEther(v)} ETH = reward ${$('#reward').value} + posting fee ${ethers.formatEther(fee)} (pays the callback gas).\nMinimum reward ${ethers.formatEther(minB)} ETH. `)+
+   `Deadline in ${$('#hours').value} h; unclaimed money comes back to you by itself.`+
    (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = topic ${c[5]}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`:'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
   catch(e){$('#sum').textContent=e.message}}
 document.querySelectorAll('#f input,#f select').forEach(i=>i.addEventListener('input',summary));
@@ -129,7 +134,8 @@ async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBount
   const n=Number(await ro.nextId());const amounts=await postedAmounts().catch(()=>({}));const rows=[];
   for(let id=n-1;id>=Math.max(1,n-10);id--){const b=await ro.bounties(id);
     const st=['none','open','paid','refunded'][Number(b[3])];const dl=new Date(Number(b[1])*1000).toISOString().slice(0,16).replace('T',' ');
-    const amt=st==='open'?b[4]:amounts[id];const reward=amt!==undefined?ethers.formatEther(amt)+' ETH':'';
+    const tok=await ro.tokenOf(id).catch(()=>ethers.ZeroAddress);const isU=tok.toLowerCase()===CFG.usdc.toLowerCase();
+    const amt=st==='open'?b[4]:amounts[id];const reward=amt===undefined?'':(tok===ethers.ZeroAddress?ethers.formatEther(amt)+' ETH':isU?ethers.formatUnits(amt,6)+' USDC':amt+' units of '+tok);
     rows.push(`<div class="b"><span class="n">#${id}</span><span class="t">${esc(b[6]||'(untitled)')}</span><span class="pill ${st}">${st}</span>`+
       `<span class="m">${reward?'Reward '+reward+' · ':''}deadline ${dl} UTC${b[5]!==ethers.ZeroAddress?`<br><span class="mono">winner ${b[5]}</span>`:''}</span></div>`)}
   $('#list').innerHTML=rows.join('')||'<p class="hint">No bounties yet.</p>'}catch(e){$('#list').innerHTML=`<p class="hint">Could not read the escrow: ${esc(e.shortMessage||e.message)}</p>`}}
@@ -142,10 +148,15 @@ $('#connect').onclick=async()=>{try{if(!window.ethereum)throw new Error('No brow
   signer=await new ethers.BrowserProvider(window.ethereum).getSigner();$('#post').disabled=false;say('Connected: '+await signer.getAddress(),'ok')}catch(e){say(e.shortMessage||e.message,'err')}};
 $('#f').onsubmit=async ev=>{ev.preventDefault();if(!signer)return;const btn=$('#post');btn.disabled=true;
   try{const title=$('#title').value.trim();if(!title)throw new Error('Say what should happen.');
-    const reward=ethers.parseEther($('#reward').value||'0');if(reward<minB)throw new Error(`Reward must be at least ${ethers.formatEther(minB)} ETH.`);
+    const reward=rewardUnits();if(!usdc()&&reward<minB)throw new Error(`Reward must be at least ${ethers.formatEther(minB)} ETH.`);
+    if(usdc()&&reward<=0n)throw new Error('Set a USDC reward.');
     const h=Number($('#hours').value);if(!(h>0&&h<=8760))throw new Error('Deadline must be between 1 hour and 1 year.');
     const deadline=BigInt(Math.floor(Date.now()/1000)+Math.round(h*3600));const c=new ethers.Contract(CFG.escrow,ABI,signer);
-    say('Confirm in your wallet…');const tx=tpl==='judged'?await c.postJudged(title,deadline,{value:value()}):await c.postProof(title,deadline,condition(),{value:value()});
+    let tx;
+    if(usdc()){const t=new ethers.Contract(CFG.usdc,['function approve(address,uint256) returns (bool)','function allowance(address,address) view returns (uint256)'],signer);
+      if((await t.allowance(await signer.getAddress(),CFG.escrow))<reward){say('Approve the USDC in your wallet…');await (await t.approve(CFG.escrow,reward)).wait()}
+      say('Confirm the bounty in your wallet…');tx=tpl==='judged'?await c.postJudgedToken(title,deadline,CFG.usdc,reward,{value:fee}):await c.postProofToken(title,deadline,condition(),CFG.usdc,reward,{value:fee})}
+    else{say('Confirm in your wallet…');tx=tpl==='judged'?await c.postJudged(title,deadline,{value:value()}):await c.postProof(title,deadline,condition(),{value:value()})}
     say('Posting… '+tx.hash);await tx.wait();say('Posted. Reactive is watching it now. '+tx.hash,'ok');load()}
   catch(e){say(e.shortMessage||e.reason||e.message,'err')}finally{btn.disabled=!signer}};
 pick(['job','weth','custom','judged'].includes(new URLSearchParams(location.search).get('t'))?new URLSearchParams(location.search).get('t'):'job');load();
