@@ -90,14 +90,15 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
   <h2 style="margin:0 0 6px;font-size:22px">Latest bounties</h2>
   <p class="hint">Read straight from the escrow logs on Base Sepolia. New bounties go to <span class="mono" id="escAddr">0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5</span> (v4); earlier runs on v3 and v2 are listed too.</p>
   <div id="list"><!--SNAPSHOT-->
-<p class="hint">Snapshot from chain logs, 2026-11-17 22:11 UTC (no JavaScript needed; the live list replaces it). 5 paid · 1 refunded · 0 open, across escrow versions v2-v4.</p>
+<p class="hint">Snapshot from chain logs, 2026-11-17 22:17 UTC (no JavaScript needed; the live list replaces it). 5 paid · 1 refunded · 1 open, across escrow versions v2-v4.</p>
+<div class="b"><span class="n">#2</span><span class="t">Open to anyone: run job 4242 on the Sepolia job board</span><span class="pill open">open</span><span class="m">v4 · proof · Reward 0.0005 ETH · deadline 2026-11-24 22:16 UTC</span></div>
 <div class="b"><span class="n">#1</span><span class="t">Wrap &gt;= 0.00005 ETH on Sepolia WETH (keeper only)</span><span class="pill paid">paid</span><span class="m">v4 · proof · Reward 0.0001 ETH · deadline 2026-11-18 00:03 UTC · only for <span class="mono">0x950b…bbf3</span> · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0xaa5cd34e52fed32ed235e9ef8e35a051550bed39786d00cffea7bd89459ab1f3">payout tx</a></span></div>
 <div class="b"><span class="n">#2</span><span class="t">Run job 1794951884 on Sepolia for 5 USDC</span><span class="pill paid">paid</span><span class="m">v3 · proof · Reward 5 USDC · deadline 2026-11-17 22:44 UTC · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0x1bf02decfc9892c9bea0ecd74ed5d31efaca5b6e375cc3c2f25180c5ee5a87c9">payout tx</a></span></div>
 <div class="b"><span class="n">#1</span><span class="t">Run job 1794951801 on Sepolia (v3)</span><span class="pill paid">paid</span><span class="m">v3 · proof · Reward 0.0003 ETH · deadline 2026-11-17 22:43 UTC · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0xabd7d9637764a2485a051d1b8884da3d953853b2fbfd5b6397392c5b34b9337e">payout tx</a></span></div>
 <div class="b"><span class="n">#3</span><span class="t">First to wrap 0.003 ETH on Sepolia WETH</span><span class="pill paid">paid</span><span class="m">v2 · proof · Reward 0.00015 ETH · deadline 2026-11-17 21:47 UTC · <span class="mono">winner 0x78fc1fa18c55c42bca391bfee8b57b623e7d99aa</span> · <a href="https://sepolia.basescan.org/tx/0x0208fa60ffb87c76d481a0ee9039122bb177549154eaf474126cfa946e857df8">payout tx</a></span></div>
 <div class="b"><span class="n">#2</span><span class="t">Unclaimed demo bounty</span><span class="pill refunded">refunded</span><span class="m">v2 · judged · Reward 0.00028 ETH · deadline 2026-11-17 21:07 UTC · <a href="https://sepolia.basescan.org/tx/0x2bac5bea0382b20baa77302d1c1c55c6ff506a200959b798055f5166ad0bcbc6">refund tx</a></span></div>
 <div class="b"><span class="n">#1</span><span class="t">Run job 1794948400 on Sepolia</span><span class="pill paid">paid</span><span class="m">v2 · proof · Reward 0.00048 ETH · deadline 2026-11-17 21:46 UTC · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0x8e32730b2326d68f22b3b131acf2ff3b09bb1d63b75b727f6660d77dd6f21e42">payout tx</a></span></div>
-<p class="hint">v4 watcher on Reactive Lasna: 0.0057 lREACT, deadline cron off (refunds by the public expire() until it is switched on) (fundedUntil()).</p>
+<p class="hint">v4 watcher on Reactive Lasna: 0.0136 lREACT, deadline cron off (refunds by the public expire() until it is switched on) (fundedUntil()).</p>
 <!--/SNAPSHOT--></div>
 </div>
 <p class="hint">Code and the full testnet run: <a href="https://github.com/swiftbotlabs/handshake">github.com/swiftbotlabs/handshake</a></p>
@@ -141,7 +142,23 @@ function summary(){try{const v=value(),c=tpl==='judged'?null:condition();
 document.querySelectorAll('#f input,#f select').forEach(i=>i.addEventListener('input',summary));
 const TOP={posted:ethers.id('BountyPosted(uint256,address,uint8,uint256,uint256,string)'),token:ethers.id('BountyToken(uint256,address)'),
   allowed:ethers.id('ClaimantAllowed(uint256,address)'),paid:ethers.id('BountyPaid(uint256,address,uint256,uint8,bytes32)'),
-  refunded:ethers.id('BountyRefunded(uint256,address,uint256,uint8)')};
+  refunded:ethers.id('BountyRefunded(uint256,address,uint256,uint8)'),
+  cond:ethers.id('ProofCondition(uint256,uint256,address,uint256,bool,uint256,uint8,uint256)')};
+const JOBRUN=BigInt(ethers.id('JobRun(uint256,address,uint256)')), DEPOSIT=BigInt(ethers.id('Deposit(address,uint256)'));
+// Claimant view: the action that proves an open bounty, done from the claimant's own wallet on Ethereum Sepolia.
+function claimAction(x){if(x.st!=='open'||!x.cond||x.ver!=='v4'&&x.ver!=='v3')return null;const c=x.cond;
+  if(Number(c.chainId)!==CFG.origin)return null;
+  if(c.emitter.toLowerCase()===CFG.jobs.toLowerCase()&&c.topic0===JOBRUN&&c.pinned)return{label:`Run job ${c.topic1} on Sepolia`,go:s=>new ethers.Contract(CFG.jobs,['function run(uint256,uint256)'],s).run(c.topic1,c.min)};
+  if(c.emitter.toLowerCase()===CFG.weth.toLowerCase()&&c.topic0===DEPOSIT)return{label:`Wrap ${ethers.formatEther(c.min)} ETH on Sepolia`,go:s=>new ethers.Contract(CFG.weth,['function deposit() payable'],s).deposit({value:c.min})};
+  return null}
+const ACTS={};
+async function claim(key){const a=ACTS[key];const out=$('#c'+key);try{if(!window.ethereum)throw new Error('No browser wallet found.');
+  const p=new ethers.BrowserProvider(window.ethereum);await p.send('eth_requestAccounts',[]);
+  if(Number((await p.getNetwork()).chainId)!==CFG.origin)await p.send('wallet_switchEthereumChain',[{chainId:'0x'+CFG.origin.toString(16)}]);
+  const s=await new ethers.BrowserProvider(window.ethereum).getSigner();const me=await s.getAddress();
+  if(a.only.length&&!a.only.some(o=>o.toLowerCase()===me.toLowerCase()))throw new Error('This bounty only pays '+a.only.join(', ')+'; your proof would be ignored.');
+  out.textContent='Confirm in your wallet…';const tx=await a.go(s);out.textContent='Sent '+tx.hash+'. Reactive pays you on Base Sepolia within seconds of it landing.';
+  await tx.wait();setTimeout(load,8000)}catch(e){out.textContent=e.shortMessage||e.reason||e.message}}
 const A=t=>ethers.getAddress('0x'+t.slice(-40)), sh=a=>a.slice(0,6)+'…'+a.slice(-4);
 async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBounty()]);summary();
   const prov=ro.runner.provider||ro.provider, latest=await prov.getBlockNumber(), rows=[], co=ethers.AbiCoder.defaultAbiCoder();
@@ -154,7 +171,9 @@ async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBount
       else if(!b[id])continue;
       else if(t===TOP.allowed)b[id].only.push(A(l.topics[2]));
       else if(t===TOP.paid)Object.assign(b[id],{st:'paid',win:A(l.topics[2]),tx:l.transactionHash});
-      else if(t===TOP.refunded)Object.assign(b[id],{st:'refunded',tx:l.transactionHash})}
+      else if(t===TOP.refunded)Object.assign(b[id],{st:'refunded',tx:l.transactionHash})
+      else if(t===TOP.cond){const d=co.decode(['uint256','address','uint256','bool','uint256','uint8','uint256'],l.data);
+        b[id].cond={chainId:d[0],emitter:d[1],topic0:d[2],pinned:d[3],topic1:d[4],min:d[6]}}}
     Object.values(b).sort((x,y)=>y.id-x.id).forEach(x=>{x.tok=toks[x.id]||null;rows.push(x)})}
   $('#list').innerHTML=rows.map(x=>{const isU=x.tok&&x.tok.toLowerCase()===CFG.usdc.toLowerCase();
     const reward=x.tok?(isU?ethers.formatUnits(x.amt,6)+' USDC':x.amt+' units of '+x.tok):ethers.formatEther(x.amt)+' ETH';
@@ -163,6 +182,8 @@ async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBount
     if(x.only.length)m.push('only for '+x.only.map(a=>`<span class="mono">${sh(a)}</span>`).join(', '));
     if(x.win)m.push(`<span class="mono">winner ${x.win}</span>`);
     if(x.tx)m.push(`<a href="${CFG.explorer}/tx/${x.tx}">${x.st==='paid'?'payout':'refund'} tx</a>`);
+    const act=claimAction(x),key=x.ver+'_'+x.id;if(act){ACTS[key]={...act,only:x.only};
+      m.push(`<button type="button" class="ghost" style="margin-top:8px" onclick="claim('${key}')">${esc(act.label)}</button> <span id="c${key}" role="status"></span>`)}
     return `<div class="b"><span class="n">#${x.id}</span><span class="t">${esc(x.title||'(untitled)')}</span><span class="pill ${x.st}">${x.st}</span><span class="m">${m.join(' · ')}</span></div>`}).join('')||'<p class="hint">No bounties yet.</p>'}
   catch(e){/* keep the server-side snapshot */ $('#list').insertAdjacentHTML('afterbegin',`<p class="hint">Live refresh failed (${esc(e.shortMessage||e.message)}); showing the snapshot.</p>`)}}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
