@@ -72,7 +72,11 @@ close and unsubscribe [0x0082686c…](https://lasna.reactscan.net/tx/0x0082686cd
 
 Deadline loop: a judged bounty with a 20-minute deadline
 ([0x0c6c6287…](https://sepolia.basescan.org/tx/0x0c6c628781eb04f706d5a9d8ac89264f45052872db07c1b7f112c94655c0b7f8)) is refunded by a
-Cron1000 tick with no transaction from anyone. See `demo_log.md` for the refund transactions.
+Cron1000 tick with no transaction from anyone: the tick on Lasna requests the refund
+([0x06176696…](https://lasna.reactscan.net/tx/0x061766960451b97af39abfb6d9e5d5759e4357e92db34296a0b10831f2ad8f03)) and the escrow refunds
+the issuer 0.0003 ETH on Base Sepolia
+([0x0eec3c54…](https://sepolia.basescan.org/tx/0x0eec3c542ee34ae94c4062b80f43ddd73a9304a2bf2165880556ab4d4af60e3a)). Every hash is in
+`demo_log.md`.
 
 ## Run it yourself
 
