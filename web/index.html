@@ -19,8 +19,10 @@ label{display:block;font-weight:600;margin:14px 0 6px}
 input,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
 input:focus,select:focus,button:focus-visible{outline:3px solid #e0572b55;outline-offset:1px}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:560px){.row{grid-template-columns:1fr}}
-.hint{color:var(--muted);font-size:14px;margin:6px 0 0}
-.sum{font-family:var(--mono);font-size:14px;background:#FAF9F6;border:1px dashed var(--line);border-radius:10px;padding:12px;margin:16px 0;white-space:pre-wrap}
+.hint{color:var(--muted);font-size:14px;margin:6px 0 0;overflow-wrap:anywhere}
+.b{display:grid;grid-template-columns:44px 1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:start}
+.b .n{font:600 15px var(--mono);color:var(--muted)}.b .t{font-weight:600}.b .m{grid-column:2/4;color:var(--muted);font-size:14px;overflow-wrap:anywhere}
+.sum{overflow-wrap:anywhere;font-family:var(--mono);font-size:14px;background:#FAF9F6;border:1px dashed var(--line);border-radius:10px;padding:12px;margin:16px 0;white-space:pre-wrap}
 button.go{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:13px 18px;font:600 16px var(--font);cursor:pointer}
 button.go[disabled]{opacity:.5;cursor:not-allowed}
 button.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line);border-radius:12px;padding:12px 16px;font:600 15px var(--font);cursor:pointer}
@@ -83,7 +85,7 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
 <div class="card">
   <h2 style="margin:0 0 6px;font-size:22px">Latest bounties</h2>
   <p class="hint">Read straight from the escrow on Base Sepolia, <span class="mono" id="escAddr"></span>.</p>
-  <table><thead><tr><th>#</th><th>Bounty</th><th>Reward</th><th>Deadline</th><th>Status</th></tr></thead><tbody id="list"><tr><td colspan="5">Loading…</td></tr></tbody></table>
+  <div id="list"><div class="b"><span class="n"></span><span>Loading…</span></div></div>
 </div>
 <p class="hint">Code and the full testnet run: <a href="https://github.com/swiftbotlabs/handshake">github.com/swiftbotlabs/handshake</a></p>
 </main>
@@ -91,7 +93,7 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
 <script>
 const CFG={escrow:'0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802',chainId:84532,rpc:'https://base-sepolia-rpc.publicnode.com',
   jobs:'0xc964f01ed8087f51b6DD1F6434bd268176Fbf212',weth:'0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',origin:11155111,
-  explorer:'https://sepolia.basescan.org'};
+  explorer:'https://sepolia.basescan.org',fromBlock:60132600};
 const ABI=['function postProof(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256)) payable returns (uint256)',
   'function postJudged(string,uint256) payable returns (uint256)','function minBounty() view returns (uint256)','function postFee() view returns (uint256)',
   'function nextId() view returns (uint256)','function bounties(uint256) view returns (address,uint96,uint8,uint8,uint256,address,string)'];
@@ -116,11 +118,21 @@ function summary(){try{const v=value(),c=tpl==='judged'?null:condition();
    (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = topic ${c[5]}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`:'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
   catch(e){$('#sum').textContent=e.message}}
 document.querySelectorAll('#f input,#f select').forEach(i=>i.addEventListener('input',summary));
+async function postedAmounts(){ // closed bounties have amount 0 in storage: read the original reward from BountyPosted logs
+  const prov=ro.runner.provider||ro.provider, topic=ethers.id('BountyPosted(uint256,address,uint8,uint256,uint256,string)'), out={};
+  const latest=await prov.getBlockNumber(); const start=Math.max(CFG.fromBlock,latest-500000);
+  for(let to=latest;to>=start;to-=50000){const from=Math.max(start,to-49999);
+    try{const logs=await prov.getLogs({address:CFG.escrow,topics:[topic],fromBlock:from,toBlock:to});
+      for(const l of logs){out[Number(BigInt(l.topics[1]))]=ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','string'],l.data)[0]}}catch(e){break}}
+  return out}
 async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBounty()]);summary();
-  const n=Number(await ro.nextId());const rows=[];for(let id=n-1;id>=Math.max(1,n-10);id--){const b=await ro.bounties(id);
-   const st=['none','open','paid','refunded'][Number(b[3])];const dl=new Date(Number(b[1])*1000);
-   rows.push(`<tr><td>${id}</td><td>${esc(b[6])}${b[5]!==ethers.ZeroAddress?`<div class="hint mono">winner ${b[5]}</div>`:''}</td><td>${st==='open'?ethers.formatEther(b[4]):'—'}</td><td>${dl.toISOString().slice(0,16).replace('T',' ')} UTC</td><td><span class="pill ${st}">${st}</span></td></tr>`)}
-  $('#list').innerHTML=rows.join('')||'<tr><td colspan="5">No bounties yet.</td></tr>'}catch(e){$('#list').innerHTML=`<tr><td colspan="5">Could not read the escrow: ${esc(e.shortMessage||e.message)}</td></tr>`}}
+  const n=Number(await ro.nextId());const amounts=await postedAmounts().catch(()=>({}));const rows=[];
+  for(let id=n-1;id>=Math.max(1,n-10);id--){const b=await ro.bounties(id);
+    const st=['none','open','paid','refunded'][Number(b[3])];const dl=new Date(Number(b[1])*1000).toISOString().slice(0,16).replace('T',' ');
+    const amt=st==='open'?b[4]:amounts[id];const reward=amt!==undefined?ethers.formatEther(amt)+' ETH':'';
+    rows.push(`<div class="b"><span class="n">#${id}</span><span class="t">${esc(b[6]||'(untitled)')}</span><span class="pill ${st}">${st}</span>`+
+      `<span class="m">${reward?'Reward '+reward+' · ':''}deadline ${dl} UTC${b[5]!==ethers.ZeroAddress?`<br><span class="mono">winner ${b[5]}</span>`:''}</span></div>`)}
+  $('#list').innerHTML=rows.join('')||'<p class="hint">No bounties yet.</p>'}catch(e){$('#list').innerHTML=`<p class="hint">Could not read the escrow: ${esc(e.shortMessage||e.message)}</p>`}}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function say(t,cls){$('#status').textContent=t;$('#status').className=cls||''}
 $('#connect').onclick=async()=>{try{if(!window.ethereum)throw new Error('No browser wallet found. Install one (e.g. MetaMask) to post.');
