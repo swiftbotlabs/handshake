@@ -120,7 +120,12 @@ What happens if things fail:
   retries expiry after `RETRY_AFTER` (3 h). Use well-known tokens.
 - **The cron is off:** proofs still pay; refunds need `expire(id)`.
 
-REACT runway: RUNWAY_LINE
+REACT runway: measured on Lasna, 17 Nov. An idle Cron1000 tick costs the reactive contract 0.0112 REACT (balance 0.868691 -> 0.857461 across
+block 8602000); ticks come every 1000 blocks (about 17.6 min at 1.06 s per block), so an idle contract burns about **0.92 REACT a day**.
+A whole bounty lifecycle (posted, condition, proof, close) is a handful of `react()` calls of about 0.011-0.013 REACT each. At the REACT
+price of 17 Nov (0.0022 USD) that is about **0.2 cents a day** idle plus about 0.01 cents per bounty; 10 REACT keeps a contract running
+for over a week. When nothing is open the operator can switch the cron off (`setCron(false)`): proofs still pay, refunds then need
+`expire(id)`. On the testnets the v3 cron is off until the next faucet top-up; v2 runs with the cron on.
 
 ## Post one without writing code
 
