@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Handshake: post a bounty</title>
+<meta name="description" content="Post a bounty that settles itself: paid on proof, refunded at the deadline. Base Sepolia + Reactive Network testnet.">
+<style>
+:root{--bg:#F4F2EC;--ink:#15171A;--muted:#5E636B;--line:#DAD6CC;--card:#fff;--accent:#E0572B;--green:#0E8A55;--green2:#DCF0E4;--r:16px;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 var(--font)}
+main{max-width:880px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:clamp(30px,5vw,44px);letter-spacing:-.02em;margin:.2em 0 .1em}
+.lead{color:var(--muted);margin:0 0 24px;max-width:60ch}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px;margin:0 0 18px}
+.tpls{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:0 0 18px}
+.tpl{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.tpl b{display:block}.tpl span{color:var(--muted);font-size:14px}
+.tpl[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 3px #e0572b22}
+label{display:block;font-weight:600;margin:14px 0 6px}
+input,select{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:10px;font:inherit;background:#fff;color:var(--ink)}
+input:focus,select:focus,button:focus-visible{outline:3px solid #e0572b55;outline-offset:1px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:560px){.row{grid-template-columns:1fr}}
+.hint{color:var(--muted);font-size:14px;margin:6px 0 0}
+.sum{font-family:var(--mono);font-size:14px;background:#FAF9F6;border:1px dashed var(--line);border-radius:10px;padding:12px;margin:16px 0;white-space:pre-wrap}
+button.go{background:var(--accent);color:#fff;border:0;border-radius:12px;padding:13px 18px;font:600 16px var(--font);cursor:pointer}
+button.go[disabled]{opacity:.5;cursor:not-allowed}
+button.ghost{background:#fff;color:var(--ink);border:1.5px solid var(--line);border-radius:12px;padding:12px 16px;font:600 15px var(--font);cursor:pointer}
+#status{margin-top:12px;font-size:15px}#status.ok{color:var(--green)}#status.err{color:#B3261E}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.open{background:#FBE3D9;color:#9A3412}.paid{background:var(--green2);color:var(--green)}.refunded{background:#E8EAED;color:#3c4043}
+.mono{font-family:var(--mono);word-break:break-all}a{color:inherit}
+.hide{display:none}
+</style></head>
+<body><main>
+<p class="hint">Testnet demo · Base Sepolia escrow · Reactive Lasna · proofs from Ethereum Sepolia</p>
+<h1>Post a bounty. Walk away.</h1>
+<p class="lead">Pick a template, set the reward and a deadline, and sign once. Reactive Network pays the first address the chain proves did the work, or refunds you at the deadline. Nobody has to watch it.</p>
+
+<div class="card">
+  <div class="tpls" role="group" aria-label="Bounty template">
+    <button class="tpl" data-t="job" aria-pressed="true"><b>Run a job</b><span>Pay whoever first runs job N on the demo job board</span></button>
+    <button class="tpl" data-t="weth" aria-pressed="false"><b>Wrap ETH</b><span>Pay whoever first wraps at least X ETH in WETH</span></button>
+    <button class="tpl" data-t="custom" aria-pressed="false"><b>Any event</b><span>Your own contract and event as the proof</span></button>
+    <button class="tpl" data-t="judged" aria-pressed="false"><b>I judge it</b><span>You accept a claim; refunded if you don't</span></button>
+  </div>
+  <form id="f" novalidate>
+    <label for="title">What should happen?</label>
+    <input id="title" maxlength="120" required>
+    <div id="fjob">
+      <div class="row">
+        <div><label for="job">Job id</label><input id="job" inputmode="numeric" value="7"></div>
+        <div><label for="work">Minimum work</label><input id="work" inputmode="numeric" value="3"></div>
+      </div>
+      <p class="hint">Proof: <span class="mono">JobRun(jobId, keeper, work)</span> on Ethereum Sepolia, contract <span class="mono" id="jobsAddr"></span>. The keeper is paid.</p>
+    </div>
+    <div id="fweth" class="hide">
+      <label for="wmin">Minimum to wrap (ETH)</label><input id="wmin" inputmode="decimal" value="0.003">
+      <p class="hint">Proof: <span class="mono">Deposit(dst, wad)</span> from the public WETH9 contract on Ethereum Sepolia. Whoever wraps first is paid, even a stranger.</p>
+    </div>
+    <div id="fcustom" class="hide">
+      <div class="row">
+        <div><label for="cchain">Chain id</label><input id="cchain" inputmode="numeric" value="11155111"></div>
+        <div><label for="caddr">Contract</label><input id="caddr" placeholder="0x…" spellcheck="false"></div>
+      </div>
+      <label for="csig">Event signature</label><input id="csig" placeholder="Transfer(address,address,uint256)" spellcheck="false">
+      <div class="row">
+        <div><label for="cwin">Winner is indexed topic</label><select id="cwin"><option>1</option><option selected>2</option><option>3</option></select></div>
+        <div><label for="cpin">Pin topic 1 to (optional)</label><input id="cpin" placeholder="number or 0x…" spellcheck="false"></div>
+      </div>
+      <label for="cmin">First data word at least</label><input id="cmin" inputmode="numeric" value="0">
+    </div>
+    <div class="row">
+      <div><label for="reward">Reward (ETH)</label><input id="reward" inputmode="decimal" value="0.0005"></div>
+      <div><label for="hours">Deadline (hours from now)</label><input id="hours" inputmode="numeric" value="24"></div>
+    </div>
+    <div class="sum" id="sum" aria-live="polite"></div>
+    <button type="button" class="ghost" id="connect">Connect wallet</button>
+    <button type="submit" class="go" id="post" disabled>Post bounty</button>
+    <div id="status" role="status"></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2 style="margin:0 0 6px;font-size:22px">Latest bounties</h2>
+  <p class="hint">Read straight from the escrow on Base Sepolia, <span class="mono" id="escAddr"></span>.</p>
+  <table><thead><tr><th>#</th><th>Bounty</th><th>Reward</th><th>Deadline</th><th>Status</th></tr></thead><tbody id="list"><tr><td colspan="5">Loading…</td></tr></tbody></table>
+</div>
+<p class="hint">Code and the full testnet run: <a href="https://github.com/swiftbotlabs/handshake">github.com/swiftbotlabs/handshake</a></p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js" crossorigin="anonymous"></script>
+<script>
+const CFG={escrow:'0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802',chainId:84532,rpc:'https://base-sepolia-rpc.publicnode.com',
+  jobs:'0xc964f01ed8087f51b6DD1F6434bd268176Fbf212',weth:'0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',origin:11155111,
+  explorer:'https://sepolia.basescan.org'};
+const ABI=['function postProof(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256)) payable returns (uint256)',
+  'function postJudged(string,uint256) payable returns (uint256)','function minBounty() view returns (uint256)','function postFee() view returns (uint256)',
+  'function nextId() view returns (uint256)','function bounties(uint256) view returns (address,uint96,uint8,uint8,uint256,address,string)'];
+const $=s=>document.querySelector(s); let tpl='job', signer=null, fee=0n, minB=1n;
+const ro=new ethers.Contract(CFG.escrow,ABI,new ethers.JsonRpcProvider(CFG.rpc,CFG.chainId,{staticNetwork:true}));
+$('#jobsAddr').textContent=CFG.jobs; $('#escAddr').textContent=CFG.escrow;
+const defaults={job:()=>`Run job ${$('#job').value} on the job board`,weth:()=>`First to wrap ${$('#wmin').value} ETH in WETH`,custom:()=>'Emit my event',judged:()=>'Design a logo for the zine'};
+function pick(t){tpl=t;document.querySelectorAll('.tpl').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
+  ['job','weth','custom'].forEach(k=>$('#f'+k).classList.toggle('hide',k!==t));$('#title').value=defaults[t]();summary()}
+document.querySelectorAll('.tpl').forEach(b=>b.onclick=()=>pick(b.dataset.t));
+function condition(){
+  if(tpl==='job'){const job=BigInt($('#job').value||'0'),w=BigInt($('#work').value||'0');
+    return [CFG.origin,CFG.jobs,BigInt(ethers.id('JobRun(uint256,address,uint256)')),true,job,2,w]}
+  if(tpl==='weth'){return [CFG.origin,CFG.weth,BigInt(ethers.id('Deposit(address,uint256)')),false,0n,1,ethers.parseEther($('#wmin').value||'0')]}
+  const sig=$('#csig').value.trim().replace(/\s+/g,'');if(!/^[A-Za-z_][A-Za-z0-9_]*\(.*\)$/.test(sig))throw new Error('Event signature looks wrong, e.g. Transfer(address,address,uint256)');
+  const addr=ethers.getAddress($('#caddr').value.trim());const pin=$('#cpin').value.trim();
+  return [BigInt($('#cchain').value),addr,BigInt(ethers.id(sig)),pin!=='',pin===''?0n:BigInt(pin),Number($('#cwin').value),BigInt($('#cmin').value||'0')]}
+function value(){return ethers.parseEther($('#reward').value||'0')+fee}
+function summary(){try{const v=value(),c=tpl==='judged'?null:condition();
+  $('#sum').textContent=`You send ${ethers.formatEther(v)} ETH = reward ${$('#reward').value} + posting fee ${ethers.formatEther(fee)} (pays the callback gas).\n`+
+   `Minimum reward ${ethers.formatEther(minB)} ETH. Deadline in ${$('#hours').value} h; unclaimed money comes back to you by itself.`+
+   (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = topic ${c[5]}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`:'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
+  catch(e){$('#sum').textContent=e.message}}
+document.querySelectorAll('#f input,#f select').forEach(i=>i.addEventListener('input',summary));
+async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBounty()]);summary();
+  const n=Number(await ro.nextId());const rows=[];for(let id=n-1;id>=Math.max(1,n-10);id--){const b=await ro.bounties(id);
+   const st=['none','open','paid','refunded'][Number(b[3])];const dl=new Date(Number(b[1])*1000);
+   rows.push(`<tr><td>${id}</td><td>${esc(b[6])}${b[5]!==ethers.ZeroAddress?`<div class="hint mono">winner ${b[5]}</div>`:''}</td><td>${st==='open'?ethers.formatEther(b[4]):'—'}</td><td>${dl.toISOString().slice(0,16).replace('T',' ')} UTC</td><td><span class="pill ${st}">${st}</span></td></tr>`)}
+  $('#list').innerHTML=rows.join('')||'<tr><td colspan="5">No bounties yet.</td></tr>'}catch(e){$('#list').innerHTML=`<tr><td colspan="5">Could not read the escrow: ${esc(e.shortMessage||e.message)}</td></tr>`}}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function say(t,cls){$('#status').textContent=t;$('#status').className=cls||''}
+$('#connect').onclick=async()=>{try{if(!window.ethereum)throw new Error('No browser wallet found. Install one (e.g. MetaMask) to post.');
+  const p=new ethers.BrowserProvider(window.ethereum);await p.send('eth_requestAccounts',[]);
+  const net=await p.getNetwork();if(Number(net.chainId)!==CFG.chainId){try{await p.send('wallet_switchEthereumChain',[{chainId:'0x'+CFG.chainId.toString(16)}])}
+    catch(e){await p.send('wallet_addEthereumChain',[{chainId:'0x14a34',chainName:'Base Sepolia',rpcUrls:[CFG.rpc],nativeCurrency:{name:'ETH',symbol:'ETH',decimals:18},blockExplorerUrls:[CFG.explorer]}])}}
+  signer=await new ethers.BrowserProvider(window.ethereum).getSigner();$('#post').disabled=false;say('Connected: '+await signer.getAddress(),'ok')}catch(e){say(e.shortMessage||e.message,'err')}};
+$('#f').onsubmit=async ev=>{ev.preventDefault();if(!signer)return;const btn=$('#post');btn.disabled=true;
+  try{const title=$('#title').value.trim();if(!title)throw new Error('Say what should happen.');
+    const reward=ethers.parseEther($('#reward').value||'0');if(reward<minB)throw new Error(`Reward must be at least ${ethers.formatEther(minB)} ETH.`);
+    const h=Number($('#hours').value);if(!(h>0&&h<=8760))throw new Error('Deadline must be between 1 hour and 1 year.');
+    const deadline=BigInt(Math.floor(Date.now()/1000)+Math.round(h*3600));const c=new ethers.Contract(CFG.escrow,ABI,signer);
+    say('Confirm in your wallet…');const tx=tpl==='judged'?await c.postJudged(title,deadline,{value:value()}):await c.postProof(title,deadline,condition(),{value:value()});
+    say('Posting… '+tx.hash);await tx.wait();say('Posted. Reactive is watching it now. '+tx.hash,'ok');load()}
+  catch(e){say(e.shortMessage||e.reason||e.message,'err')}finally{btn.disabled=!signer}};
+pick(['job','weth','custom','judged'].includes(new URLSearchParams(location.search).get('t'))?new URLSearchParams(location.search).get('t'):'job');load();
+</script></body></html>

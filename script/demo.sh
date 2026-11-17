@@ -24,3 +24,11 @@ note "A3 wait for BountyPaid on Base Sepolia (Reactive callback): check $ESC eve
 DL2=$(( $(date +%s) + 1200 ))
 h=$(cast send --rpc-url $BASE_SEP --private-key "$RX_TN_KEY" $ESC 'postJudged(string,uint256)' "Unclaimed demo bounty" $DL2 --value 0.0003ether --json | tx)
 note "B1 postJudged, deadline +20 min (Base Sepolia) $h; expect BountyRefunded via=1 within ~40 min"
+# C) THIRD-PARTY proof source: pay whoever first wraps >= 0.003 ETH in the public WETH9 contract on Ethereum Sepolia.
+#    Nobody here controls who that is: the first qualifying stranger (or our keeper) gets paid.
+WETH=0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14
+TD=$(cast keccak 'Deposit(address,uint256)')
+DL3=$(( $(date +%s) + 3600 ))
+h=$(cast send --rpc-url $BASE_SEP --private-key "$RX_TN_KEY" $ESC 'postProof(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256))' \
+   "First to wrap 0.003 ETH on Sepolia WETH" $DL3 "(11155111,$WETH,$TD,false,0,1,3000000000000000)" --value 0.00017ether --json | tx)
+note "C1 postProof on a third-party event: WETH9 Deposit >= 0.003 ETH on Sepolia, winner = depositor (Base Sepolia) $h"
