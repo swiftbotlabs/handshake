@@ -41,8 +41,8 @@ unsubscribes.
 ## Safety
 
 - **Anti-spam:** every bounty must be at least `minBounty`, and each post pays a flat `postFee` that stays in the escrow as the gas
-  float the callback proxy bills. Spam pays for the callbacks it causes. (Testnet: 0.0001 ETH minimum, 0.00002 ETH fee.) The reactive
-  side (REACT for each `react()`) is still funded by the operator; see Limits.
+  float the callback proxy bills. Spam pays for the callbacks it causes, and since v5 the fee surplus above the float buys the
+  reactive side's REACT too (`fundReactive()`). (Testnet: 0.0001 ETH minimum, 0.00002 ETH fee.)
 
 - Every callback is checked twice: the callback proxy (`onlyServiceProvider`) and our reactive contract as the sender.
 - The escrow re-checks everything on its own chain: still open, right kind, before or after the deadline on this chain's clock.
@@ -241,8 +241,8 @@ wrong; the allowlist is emitted before the condition; only the issuer can restri
 ## Limits
 
 - Testnets only.
-- The posting fee covers callback gas on the escrow chain; REACT for the reactive contract is topped up by the operator. A
-  mainnet run costs cents in REACT (0.002 USD each at 17 Nov prices), but needs REACT bought and bridged first.
+- On the testnets posting fees buy the watcher's REACT on chain (Reactive's faucet contract). Mainnet has no such on-ramp contract
+  today, so there `reactFunder` is zero and the operator buys and bridges REACT by hand (cents a day at 17 Nov prices).
 - A wildcard proof on a busy contract (like WETH9) runs `react()` for every matching log until it pays, so keep such deadlines short.
 - The deadline refund fires on the first Cron1000 tick after the deadline (about every 17 minutes), not at the exact second.
 - The issuer has to describe the proof event correctly; the escrow checks the shape, not the meaning.
