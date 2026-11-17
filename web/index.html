@@ -75,6 +75,10 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
       <div><label for="reward">Reward</label><div style="display:flex;gap:8px"><input id="reward" inputmode="decimal" value="0.0005"><select id="cur" style="width:110px" aria-label="Currency"><option>ETH</option><option>USDC</option></select></div></div>
       <div><label for="hours">Deadline (hours from now)</label><input id="hours" inputmode="numeric" value="24"></div>
     </div>
+    <div id="fonly">
+      <label for="only">Only pay this address (optional)</label><input id="only" placeholder="0x… the claimant you agreed with" spellcheck="false">
+      <p class="hint">Stops front-running: if a bot copies the claimant's transaction, the proof names the bot and Handshake ignores it.</p>
+    </div>
     <div class="sum" id="sum" aria-live="polite"></div>
     <button type="button" class="ghost" id="connect">Connect wallet</button>
     <button type="submit" class="go" id="post" disabled>Post bounty</button>
@@ -84,17 +88,29 @@ th{color:var(--muted);font-weight:600}.pill{display:inline-block;padding:2px 8px
 
 <div class="card">
   <h2 style="margin:0 0 6px;font-size:22px">Latest bounties</h2>
-  <p class="hint">Read straight from the escrow on Base Sepolia, <span class="mono" id="escAddr"></span>.</p>
-  <div id="list"><div class="b"><span class="n"></span><span>Loading…</span></div></div>
+  <p class="hint">Read straight from the escrow logs on Base Sepolia. New bounties go to <span class="mono" id="escAddr">0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5</span> (v4); earlier runs on v3 and v2 are listed too.</p>
+  <div id="list"><!--SNAPSHOT-->
+<p class="hint">Snapshot from chain logs, 2026-11-17 22:11 UTC (no JavaScript needed; the live list replaces it). 5 paid · 1 refunded · 0 open, across escrow versions v2-v4.</p>
+<div class="b"><span class="n">#1</span><span class="t">Wrap &gt;= 0.00005 ETH on Sepolia WETH (keeper only)</span><span class="pill paid">paid</span><span class="m">v4 · proof · Reward 0.0001 ETH · deadline 2026-11-18 00:03 UTC · only for <span class="mono">0x950b…bbf3</span> · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0xaa5cd34e52fed32ed235e9ef8e35a051550bed39786d00cffea7bd89459ab1f3">payout tx</a></span></div>
+<div class="b"><span class="n">#2</span><span class="t">Run job 1794951884 on Sepolia for 5 USDC</span><span class="pill paid">paid</span><span class="m">v3 · proof · Reward 5 USDC · deadline 2026-11-17 22:44 UTC · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0x1bf02decfc9892c9bea0ecd74ed5d31efaca5b6e375cc3c2f25180c5ee5a87c9">payout tx</a></span></div>
+<div class="b"><span class="n">#1</span><span class="t">Run job 1794951801 on Sepolia (v3)</span><span class="pill paid">paid</span><span class="m">v3 · proof · Reward 0.0003 ETH · deadline 2026-11-17 22:43 UTC · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0xabd7d9637764a2485a051d1b8884da3d953853b2fbfd5b6397392c5b34b9337e">payout tx</a></span></div>
+<div class="b"><span class="n">#3</span><span class="t">First to wrap 0.003 ETH on Sepolia WETH</span><span class="pill paid">paid</span><span class="m">v2 · proof · Reward 0.00015 ETH · deadline 2026-11-17 21:47 UTC · <span class="mono">winner 0x78fc1fa18c55c42bca391bfee8b57b623e7d99aa</span> · <a href="https://sepolia.basescan.org/tx/0x0208fa60ffb87c76d481a0ee9039122bb177549154eaf474126cfa946e857df8">payout tx</a></span></div>
+<div class="b"><span class="n">#2</span><span class="t">Unclaimed demo bounty</span><span class="pill refunded">refunded</span><span class="m">v2 · judged · Reward 0.00028 ETH · deadline 2026-11-17 21:07 UTC · <a href="https://sepolia.basescan.org/tx/0x2bac5bea0382b20baa77302d1c1c55c6ff506a200959b798055f5166ad0bcbc6">refund tx</a></span></div>
+<div class="b"><span class="n">#1</span><span class="t">Run job 1794948400 on Sepolia</span><span class="pill paid">paid</span><span class="m">v2 · proof · Reward 0.00048 ETH · deadline 2026-11-17 21:46 UTC · <span class="mono">winner 0x950b75a737993033108015974ddcddc39185bbf3</span> · <a href="https://sepolia.basescan.org/tx/0x8e32730b2326d68f22b3b131acf2ff3b09bb1d63b75b727f6660d77dd6f21e42">payout tx</a></span></div>
+<p class="hint">v4 watcher on Reactive Lasna: 0.0057 lREACT, deadline cron off (refunds by the public expire() until it is switched on) (fundedUntil()).</p>
+<!--/SNAPSHOT--></div>
 </div>
 <p class="hint">Code and the full testnet run: <a href="https://github.com/swiftbotlabs/handshake">github.com/swiftbotlabs/handshake</a></p>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.13.4/ethers.umd.min.js" crossorigin="anonymous"></script>
 <script>
-const CFG={escrow:'0xf45D582Edbf7dB418b32C6cdA13D16ff57Cae7A2',usdc:'0x036CbD53842c5426634e7929541eC2318f3dCF7e',chainId:84532,rpc:'https://base-sepolia-rpc.publicnode.com',
+const CFG={escrow:'0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5',usdc:'0x036CbD53842c5426634e7929541eC2318f3dCF7e',chainId:84532,rpc:'https://base-sepolia-rpc.publicnode.com',
   jobs:'0xc964f01ed8087f51b6DD1F6434bd268176Fbf212',weth:'0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',origin:11155111,
-  explorer:'https://sepolia.basescan.org',fromBlock:60146552};
+  explorer:'https://sepolia.basescan.org',fromBlock:60155400,
+  all:[['v4','0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5',60155400],['v3','0xf45D582Edbf7dB418b32C6cdA13D16ff57Cae7A2',60146500],['v2','0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802',60125000]]};
 const ABI=['function postProof(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256)) payable returns (uint256)',
+  'function postProofFor(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256),address[]) payable returns (uint256)',
+  'function postProofTokenFor(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256),address,uint256,address[]) payable returns (uint256)',
   'function postProofToken(string,uint256,(uint256,address,uint256,bool,uint256,uint8,uint256),address,uint256) payable returns (uint256)',
   'function postJudgedToken(string,uint256,address,uint256) payable returns (uint256)','function tokenOf(uint256) view returns (address)',
   'function postJudged(string,uint256) payable returns (uint256)','function minBounty() view returns (uint256)','function postFee() view returns (uint256)',
@@ -104,7 +120,7 @@ const ro=new ethers.Contract(CFG.escrow,ABI,new ethers.JsonRpcProvider(CFG.rpc,C
 $('#jobsAddr').textContent=CFG.jobs; $('#escAddr').textContent=CFG.escrow;
 const defaults={job:()=>`Run job ${$('#job').value} on the job board`,weth:()=>`First to wrap ${$('#wmin').value} ETH in WETH`,custom:()=>'Emit my event',judged:()=>'Design a logo for the zine'};
 function pick(t){tpl=t;document.querySelectorAll('.tpl').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===t));
-  ['job','weth','custom'].forEach(k=>$('#f'+k).classList.toggle('hide',k!==t));$('#title').value=defaults[t]();summary()}
+  ['job','weth','custom'].forEach(k=>$('#f'+k).classList.toggle('hide',k!==t));$('#fonly').classList.toggle('hide',t==='judged');$('#title').value=defaults[t]();summary()}
 document.querySelectorAll('.tpl').forEach(b=>b.onclick=()=>pick(b.dataset.t));
 function condition(){
   if(tpl==='job'){const job=BigInt($('#job').value||'0'),w=BigInt($('#work').value||'0');
@@ -120,25 +136,35 @@ function summary(){try{const v=value(),c=tpl==='judged'?null:condition();
   $('#sum').textContent=(usdc()?`You send ${$('#reward').value} USDC (approve + post, two signatures) and a posting fee of ${ethers.formatEther(fee)} ETH (pays the callback gas).\n`:
    `You send ${ethers.formatEther(v)} ETH = reward ${$('#reward').value} + posting fee ${ethers.formatEther(fee)} (pays the callback gas).\nMinimum reward ${ethers.formatEther(minB)} ETH. `)+
    `Deadline in ${$('#hours').value} h; unclaimed money comes back to you by itself.`+
-   (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = topic ${c[5]}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`:'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
+   (c?`\nProof: chain ${c[0]}, contract ${c[1]}, topic0 ${ethers.toBeHex(c[2]).slice(0,10)}…, winner = topic ${c[5]}${c[3]?`, topic 1 pinned to ${c[4]}`:''}, value ≥ ${c[6]}`+($('#only').value.trim()?`\nOnly pays ${$('#only').value.trim()}; a proof naming anyone else is ignored.`:'\nAnyone may be paid (first valid proof wins).'):'\nYou pay it by accepting a claim; if you never do, it refunds itself.')}
   catch(e){$('#sum').textContent=e.message}}
 document.querySelectorAll('#f input,#f select').forEach(i=>i.addEventListener('input',summary));
-async function postedAmounts(){ // closed bounties have amount 0 in storage: read the original reward from BountyPosted logs
-  const prov=ro.runner.provider||ro.provider, topic=ethers.id('BountyPosted(uint256,address,uint8,uint256,uint256,string)'), out={};
-  const latest=await prov.getBlockNumber(); const start=Math.max(CFG.fromBlock,latest-500000);
-  for(let to=latest;to>=start;to-=50000){const from=Math.max(start,to-49999);
-    try{const logs=await prov.getLogs({address:CFG.escrow,topics:[topic],fromBlock:from,toBlock:to});
-      for(const l of logs){out[Number(BigInt(l.topics[1]))]=ethers.AbiCoder.defaultAbiCoder().decode(['uint256','uint256','string'],l.data)[0]}}catch(e){break}}
-  return out}
+const TOP={posted:ethers.id('BountyPosted(uint256,address,uint8,uint256,uint256,string)'),token:ethers.id('BountyToken(uint256,address)'),
+  allowed:ethers.id('ClaimantAllowed(uint256,address)'),paid:ethers.id('BountyPaid(uint256,address,uint256,uint8,bytes32)'),
+  refunded:ethers.id('BountyRefunded(uint256,address,uint256,uint8)')};
+const A=t=>ethers.getAddress('0x'+t.slice(-40)), sh=a=>a.slice(0,6)+'…'+a.slice(-4);
 async function load(){try{[fee,minB]=await Promise.all([ro.postFee(),ro.minBounty()]);summary();
-  const n=Number(await ro.nextId());const amounts=await postedAmounts().catch(()=>({}));const rows=[];
-  for(let id=n-1;id>=Math.max(1,n-10);id--){const b=await ro.bounties(id);
-    const st=['none','open','paid','refunded'][Number(b[3])];const dl=new Date(Number(b[1])*1000).toISOString().slice(0,16).replace('T',' ');
-    const tok=await ro.tokenOf(id).catch(()=>ethers.ZeroAddress);const isU=tok.toLowerCase()===CFG.usdc.toLowerCase();
-    const amt=st==='open'?b[4]:amounts[id];const reward=amt===undefined?'':(tok===ethers.ZeroAddress?ethers.formatEther(amt)+' ETH':isU?ethers.formatUnits(amt,6)+' USDC':amt+' units of '+tok);
-    rows.push(`<div class="b"><span class="n">#${id}</span><span class="t">${esc(b[6]||'(untitled)')}</span><span class="pill ${st}">${st}</span>`+
-      `<span class="m">${reward?'Reward '+reward+' · ':''}deadline ${dl} UTC${b[5]!==ethers.ZeroAddress?`<br><span class="mono">winner ${b[5]}</span>`:''}</span></div>`)}
-  $('#list').innerHTML=rows.join('')||'<p class="hint">No bounties yet.</p>'}catch(e){$('#list').innerHTML=`<p class="hint">Could not read the escrow: ${esc(e.shortMessage||e.message)}</p>`}}
+  const prov=ro.runner.provider||ro.provider, latest=await prov.getBlockNumber(), rows=[], co=ethers.AbiCoder.defaultAbiCoder();
+  for(const [ver,addr,start] of CFG.all){const b={},toks={};let logs=[];
+    for(let from=start;from<=latest;from+=50000){logs=logs.concat(await prov.getLogs({address:addr,fromBlock:from,toBlock:Math.min(latest,from+49999)}))}
+    for(const l of logs){const t=l.topics[0],id=l.topics[1]?Number(BigInt(l.topics[1])):0;
+      if(t===TOP.posted){const [amt,dl,title]=co.decode(['uint256','uint256','string'],l.data);
+        b[id]={id,ver,title,amt,dl,kind:Number(BigInt(l.topics[3])),st:'open',tok:null,only:[],tx:null,win:null}}
+      else if(t===TOP.token)toks[id]=A(l.topics[2]); // emitted just before BountyPosted
+      else if(!b[id])continue;
+      else if(t===TOP.allowed)b[id].only.push(A(l.topics[2]));
+      else if(t===TOP.paid)Object.assign(b[id],{st:'paid',win:A(l.topics[2]),tx:l.transactionHash});
+      else if(t===TOP.refunded)Object.assign(b[id],{st:'refunded',tx:l.transactionHash})}
+    Object.values(b).sort((x,y)=>y.id-x.id).forEach(x=>{x.tok=toks[x.id]||null;rows.push(x)})}
+  $('#list').innerHTML=rows.map(x=>{const isU=x.tok&&x.tok.toLowerCase()===CFG.usdc.toLowerCase();
+    const reward=x.tok?(isU?ethers.formatUnits(x.amt,6)+' USDC':x.amt+' units of '+x.tok):ethers.formatEther(x.amt)+' ETH';
+    const dl=new Date(Number(x.dl)*1000).toISOString().slice(0,16).replace('T',' ');
+    const m=[`${x.ver} · ${x.kind?'proof':'judged'} · Reward ${reward} · deadline ${dl} UTC`];
+    if(x.only.length)m.push('only for '+x.only.map(a=>`<span class="mono">${sh(a)}</span>`).join(', '));
+    if(x.win)m.push(`<span class="mono">winner ${x.win}</span>`);
+    if(x.tx)m.push(`<a href="${CFG.explorer}/tx/${x.tx}">${x.st==='paid'?'payout':'refund'} tx</a>`);
+    return `<div class="b"><span class="n">#${x.id}</span><span class="t">${esc(x.title||'(untitled)')}</span><span class="pill ${x.st}">${x.st}</span><span class="m">${m.join(' · ')}</span></div>`}).join('')||'<p class="hint">No bounties yet.</p>'}
+  catch(e){/* keep the server-side snapshot */ $('#list').insertAdjacentHTML('afterbegin',`<p class="hint">Live refresh failed (${esc(e.shortMessage||e.message)}); showing the snapshot.</p>`)}}
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function say(t,cls){$('#status').textContent=t;$('#status').className=cls||''}
 $('#connect').onclick=async()=>{try{if(!window.ethereum)throw new Error('No browser wallet found. Install one (e.g. MetaMask) to post.');
@@ -152,11 +178,12 @@ $('#f').onsubmit=async ev=>{ev.preventDefault();if(!signer)return;const btn=$('#
     if(usdc()&&reward<=0n)throw new Error('Set a USDC reward.');
     const h=Number($('#hours').value);if(!(h>0&&h<=8760))throw new Error('Deadline must be between 1 hour and 1 year.');
     const deadline=BigInt(Math.floor(Date.now()/1000)+Math.round(h*3600));const c=new ethers.Contract(CFG.escrow,ABI,signer);
-    let tx;
+    let tx;const o=$('#only').value.trim();if(o&&!ethers.isAddress(o))throw new Error('"Only pay this address" is not a valid address.');
+    const only=tpl!=='judged'&&o?[ethers.getAddress(o)]:null;
     if(usdc()){const t=new ethers.Contract(CFG.usdc,['function approve(address,uint256) returns (bool)','function allowance(address,address) view returns (uint256)'],signer);
       if((await t.allowance(await signer.getAddress(),CFG.escrow))<reward){say('Approve the USDC in your wallet…');await (await t.approve(CFG.escrow,reward)).wait()}
-      say('Confirm the bounty in your wallet…');tx=tpl==='judged'?await c.postJudgedToken(title,deadline,CFG.usdc,reward,{value:fee}):await c.postProofToken(title,deadline,condition(),CFG.usdc,reward,{value:fee})}
-    else{say('Confirm in your wallet…');tx=tpl==='judged'?await c.postJudged(title,deadline,{value:value()}):await c.postProof(title,deadline,condition(),{value:value()})}
+      say('Confirm the bounty in your wallet…');tx=tpl==='judged'?await c.postJudgedToken(title,deadline,CFG.usdc,reward,{value:fee}):only?await c.postProofTokenFor(title,deadline,condition(),CFG.usdc,reward,only,{value:fee}):await c.postProofToken(title,deadline,condition(),CFG.usdc,reward,{value:fee})}
+    else{say('Confirm in your wallet…');tx=tpl==='judged'?await c.postJudged(title,deadline,{value:value()}):only?await c.postProofFor(title,deadline,condition(),only,{value:value()}):await c.postProof(title,deadline,condition(),{value:value()})}
     say('Posting… '+tx.hash);await tx.wait();say('Posted. Reactive is watching it now. '+tx.hash,'ok');load()}
   catch(e){say(e.shortMessage||e.reason||e.message,'err')}finally{btn.disabled=!signer}};
 pick(['job','weth','custom','judged'].includes(new URLSearchParams(location.search).get('t'))?new URLSearchParams(location.search).get('t'):'job');load();

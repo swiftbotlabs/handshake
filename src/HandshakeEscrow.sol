@@ -78,6 +78,7 @@ contract HandshakeEscrow is AbstractCallback {
     error BelowMinimum(uint256 sent, uint256 required);
     error WrongFee(uint256 sent, uint256 required);
     error TokenTransferFailed();
+    error NotProof();
 
     event BountyPosted(
         uint256 indexed id,
@@ -107,6 +108,10 @@ contract HandshakeEscrow is AbstractCallback {
     event FeeCollected(uint256 indexed id, uint256 fee);
     /// @notice An ERC-20 bounty (e.g. USDC). BountyPosted carries the token amount actually received by the vault.
     event BountyToken(uint256 indexed id, address indexed token);
+    /// @notice Anti-front-running: once a PROOF bounty has any allowed claimant, only proofs that name an allowed address
+    ///         pay. A bot that copies the claimant's job tx gets itself named in the log, so it is ignored (by the reactive
+    ///         contract, which mirrors this event, and again here). Emitted before ProofCondition when posted together.
+    event ClaimantAllowed(uint256 indexed id, address indexed claimant);
 
     uint8 internal constant VIA_ISSUER = 0;
     uint8 internal constant VIA_REACTIVE = 1;
@@ -127,6 +132,9 @@ contract HandshakeEscrow is AbstractCallback {
     mapping(uint256 => Bounty) public bounties;
     mapping(uint256 => Condition) public conditions;
     mapping(uint256 => address[]) internal _claimants;
+    /// @notice PROOF bounties with an allowlist: only proofs naming an allowed address pay (see ClaimantAllowed).
+    mapping(uint256 => bool) public restricted;
+    mapping(uint256 => mapping(address => bool)) public allowed;
 
     constructor(IPayable callbackProxy_, address reactive_, uint256 minBounty_, uint256 postFee_)
         payable
@@ -148,8 +156,47 @@ contract HandshakeEscrow is AbstractCallback {
     function postProof(string calldata title_, uint256 deadline_, Condition calldata c_) external payable returns (uint256 id) {
         _checkCondition(c_);
         id = _post(Kind.Proof, title_, deadline_);
-        conditions[id] = c_;
-        emit ProofCondition(id, c_.chainId, c_.emitter, c_.topic0, c_.matchTopic1, c_.topic1, c_.winnerTopic, c_.minValue);
+        _setCondition(id, c_);
+    }
+
+    /// @notice postProof that pays only proofs naming one of `claimants_` (the front-running guard). The allowlist is
+    ///         emitted before the condition, so the watcher knows it before it subscribes to the proof event.
+    function postProofFor(string calldata title_, uint256 deadline_, Condition calldata c_, address[] calldata claimants_)
+        external
+        payable
+        returns (uint256 id)
+    {
+        _checkCondition(c_);
+        if (claimants_.length == 0) revert BadCondition();
+        id = _post(Kind.Proof, title_, deadline_);
+        _allow(id, claimants_);
+        _setCondition(id, c_);
+    }
+
+    /// @notice The issuer adds allowed claimants to an open PROOF bounty (turns an open bounty into a restricted one).
+    function allow(uint256 id_, address[] calldata claimants_) external {
+        Bounty storage b = bounties[id_];
+        if (msg.sender != b.issuer) revert NotIssuer();
+        if (b.status != Status.Open) revert NotOpen(id_, b.status);
+        if (b.kind != Kind.Proof) revert NotProof();
+        if (claimants_.length == 0) revert BadCondition();
+        _allow(id_, claimants_);
+    }
+
+    function _allow(uint256 id_, address[] calldata claimants_) internal {
+        restricted[id_] = true;
+        for (uint256 i; i < claimants_.length; ++i) {
+            address who = claimants_[i];
+            if (who == address(0)) revert BadCondition();
+            if (allowed[id_][who]) continue;
+            allowed[id_][who] = true;
+            emit ClaimantAllowed(id_, who);
+        }
+    }
+
+    function _setCondition(uint256 id_, Condition calldata c_) internal {
+        conditions[id_] = c_;
+        emit ProofCondition(id_, c_.chainId, c_.emitter, c_.topic0, c_.matchTopic1, c_.topic1, c_.winnerTopic, c_.minValue);
     }
 
     /// @notice Same as postJudged, paid in an ERC-20 (approve this escrow first). msg.value must equal postFee exactly.
@@ -169,8 +216,23 @@ contract HandshakeEscrow is AbstractCallback {
     {
         _checkCondition(c_);
         id = _postToken(Kind.Proof, title_, deadline_, token_, amount_);
-        conditions[id] = c_;
-        emit ProofCondition(id, c_.chainId, c_.emitter, c_.topic0, c_.matchTopic1, c_.topic1, c_.winnerTopic, c_.minValue);
+        _setCondition(id, c_);
+    }
+
+    /// @notice postProofToken with a claimant allowlist (see postProofFor).
+    function postProofTokenFor(
+        string calldata title_,
+        uint256 deadline_,
+        Condition calldata c_,
+        address token_,
+        uint256 amount_,
+        address[] calldata claimants_
+    ) external payable returns (uint256 id) {
+        _checkCondition(c_);
+        if (claimants_.length == 0) revert BadCondition();
+        id = _postToken(Kind.Proof, title_, deadline_, token_, amount_);
+        _allow(id, claimants_);
+        _setCondition(id, c_);
     }
 
     function _postToken(Kind kind_, string calldata title_, uint256 deadline_, address token_, uint256 amount_)
@@ -291,6 +353,11 @@ contract HandshakeEscrow is AbstractCallback {
         }
         if (winner_ == address(0)) {
             emit CallbackSkipped(id_, "no winner");
+            return;
+        }
+        if (restricted[id_] && !allowed[id_][winner_]) {
+            // Front-run or wrong claimant: the bounty stays open for an allowed claimant's proof.
+            emit CallbackSkipped(id_, "claimant not allowed");
             return;
         }
         _payWinner(id_, b, winner_, VIA_REACTIVE, proofTx_);

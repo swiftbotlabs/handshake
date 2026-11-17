@@ -48,11 +48,42 @@ unsubscribes.
   and burn fees.
 - Bounty money sits in a separate `BountyVault`. Callback gas is billed to the escrow's own float, so a fee can never touch a bounty.
 - First valid proof wins. A proof after the deadline pays nothing and the bounty is refunded instead.
+- **Front-running guard (v4):** an issuer can name who may be paid (`postProofFor(..., claimants)`, or `allow(id, claimants)` later).
+  See [Front-running](#front-running-v4) below.
 - If Reactive ever stops, anyone can call `expire(id)` on a due bounty. Funds can only go back to the issuer.
+
+## Front-running (v4)
+
+**The attack.** A proof bounty pays the address the proof event names, and the first valid proof wins. On a chain with a public
+mempool, a bot can copy a claimant's transaction with a higher fee, land first, and be named in the event instead.
+
+**The guard.** The issuer can restrict a proof bounty to agreed claimants: `postProofFor(title, deadline, condition, [claimants])`
+(ETH) or `postProofTokenFor(...)` (ERC-20), or `allow(id, [claimants])` on an open bounty. The escrow emits `ClaimantAllowed` **before**
+`ProofCondition`, so the reactive contract knows the allowlist before it subscribes to the proof event. A proof naming anyone else is
+dropped on Reactive (`ProofIgnored`, no callback, so it costs no destination gas and does not block the real claimant's proof), and the
+escrow refuses it a second time (`CallbackSkipped "claimant not allowed"`).
+
+**What a front-runner can still do.** If the proof source is once-only (like `KeeperJobs.run`), a copier can do the job first: the
+claimant's own transaction then reverts and the bounty refunds the issuer at the deadline. The issuer got the work done and keeps the
+money, and the bot gets nothing. It can't steal the payout. Open bounties (no allowlist) stay permissionless on purpose: "pay whoever
+does it first" is the point of loop C below. For those, a private mempool or an L2 sequencer (Base) reduces copying, and binding the
+proof to `msg.sender` is already the norm, because the winner topic is whoever sent the job transaction.
+
+**On chain (v4, 17 Nov, block timestamps).** A bounty restricted to our keeper, with the public WETH9 on Sepolia as the proof
+("wrap at least 0.00005 ETH"):
+
+| Step | Origin (Ethereum Sepolia) | Reactive (Lasna) | Settlement (Base Sepolia) |
+|---|---|---|---|
+| Posted with allowlist [keeper] | | | [postProofFor](https://sepolia.basescan.org/tx/0xdbcc68de8b2ec2c07941fe3934e336cbe46ea2bae0bc838dc09a22a6b99a2177) |
+| Our test "bot" wraps first | [22:04:00](https://sepolia.etherscan.io/tx/0x0f5ebe2d9ba48f2a8320fdd08d0be59235db137108850f6893cd8a3de49ce5a4) | [ProofIgnored](https://lasna.reactscan.net/tx/0xd084bc716d15ef494d9e4dbb9b4ab888dd52669e36e2b5138405734c678cd383) | nothing sent |
+| **A stranger** (`0x6acf89a6…`, not ours) wraps 0.001 ETH | [22:04:12](https://sepolia.etherscan.io/tx/0xfc895a7d50fc1444097118d9d4b2fcbdd65ed9ec60f877a4bd1104cabe5c844d) | [ProofIgnored](https://lasna.reactscan.net/tx/0x82b0a2ffec77e900abbfe88b4428b23f2c6b131b392d24925868996c7a99365b) | nothing sent |
+| The keeper wraps | [22:05:00](https://sepolia.etherscan.io/tx/0x5d0ccd5452d280711cbf50fd42e1566221e72ea24ae5591380b56ce6a30d11bc) | [ProofSeen](https://lasna.reactscan.net/tx/0x3354c621e25ea847eac885d1ad697d38c58bcb3804d2df140e5cde854a8a05f4) | [BountyPaid to the keeper](https://sepolia.basescan.org/tx/0xaa5cd34e52fed32ed235e9ef8e35a051550bed39786d00cffea7bd89459ab1f3) 22:05:02, **+2 s** |
+
+Without the allowlist, the bot's wrap would have won (that is exactly loop C). Script: `script/frontrun_demo.sh`.
 
 ## It runs (testnets, 17 Nov 2026)
 
-Two deployments, both run end to end. Times are **block timestamps**; `./script/latency.sh <origin tx> <lasna tx> <payout tx>`
+Every deployment ran end to end (v4 above, v3, v2, v1 below). Times are **block timestamps**; `./script/latency.sh <origin tx> <lasna tx> <payout tx>`
 recomputes any row from public RPCs.
 
 **v2 (current, with the minimum and the posting fee)**: reactive (Lasna) and escrow (Base Sepolia) `0x24F1134538a06a63AE49Ed9f3bFA47fabD67c802`
@@ -89,6 +120,9 @@ reactive contracts on Reactive Lasna.
 
 | Version | Contract | Chain | Address | Source |
 |---|---|---|---|---|
+| v4 (allowlist + runway) | HandshakeReactive | Reactive Lasna (5318007) | `0x8907Bda54e22fDaC6A751e5f84DCAe95E6e4c579` | [Sourcify](https://repo.sourcify.dev/5318007/0x8907Bda54e22fDaC6A751e5f84DCAe95E6e4c579) |
+| v4 | HandshakeEscrow | Base Sepolia (84532) | `0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5` | [Sourcify](https://repo.sourcify.dev/84532/0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5) |
+| v4 | BountyVault | Base Sepolia | `0x7f219C1547c5cbF98EceFf25C0BD98746d1d24B7` | [Sourcify](https://repo.sourcify.dev/84532/0x7f219C1547c5cbF98EceFf25C0BD98746d1d24B7) |
 | v3 (ETH + ERC-20) | HandshakeReactive | Reactive Lasna (5318007) | `0xe3818074Ba24d7c64642D8a9607A86d514B770F1` | [Sourcify](https://repo.sourcify.dev/5318007/0xe3818074Ba24d7c64642D8a9607A86d514B770F1) |
 | v3 | HandshakeEscrow | Base Sepolia (84532) | `0xf45D582Edbf7dB418b32C6cdA13D16ff57Cae7A2` | [Sourcify](https://repo.sourcify.dev/84532/0xf45D582Edbf7dB418b32C6cdA13D16ff57Cae7A2) |
 | v3 | BountyVault | Base Sepolia | `0x82d2185BB25c9c1B0F602e5D495A2DE336D27848` | [Sourcify](https://repo.sourcify.dev/84532/0x82d2185BB25c9c1B0F602e5D495A2DE336D27848) |
@@ -109,7 +143,8 @@ same token. Tested with a 6-decimal USDC look-alike, including a 1 % fee-on-tran
 
 ## Trust limits and REACT runway
 
-What the operator (the deployer key) can do: link the escrow once (`linkEscrow`), switch the cron on or off (`setCron`), and top up REACT.
+What the operator (the deployer key) can do: link the escrow once (`linkEscrow`), switch the cron on or off (`setCron`), set the measured
+burn rate that `fundedUntil()` uses (`setBurnRate`), and top up REACT. Anyone can top up REACT too (a plain transfer emits `Funded`).
 What nobody can do: move bounty money anywhere except to the proven winner, the accepted claimant, or back to the issuer. There is no
 admin withdraw, no upgrade proxy, no pause on payouts.
 
@@ -127,17 +162,30 @@ price of 17 Nov (0.0022 USD) that is about **0.2 cents a day** idle plus about 0
 for over a week. When nothing is open the operator can switch the cron off (`setCron(false)`): proofs still pay, refunds then need
 `expire(id)`. On the testnets the v3 cron is off until the next faucet top-up; v2 runs with the cron on.
 
+**`fundedUntil()` (v4).** The reactive contract publishes its own runway: `(balance - debt) / costPerTick` ticks from now, at the measured
+idle rate (`setBurnRate(0.0112 REACT, 1053 s)`). A poster compares it with the bounty deadline; past it, the refund falls back to the
+public `expire()`. It returns "unbounded" while the cron is off, because nothing is billed per tick then. Measured per event: the v4
+front-run run above used 0.144 lREACT for about 9 reactions (3 escrow events, 5 WETH deposits seen in the minute the wildcard subscription
+was live, 1 close), about 0.016 lREACT per reaction including the callback request.
+
+**Fees to REACT.** The posting fee is collected in ETH on the escrow chain, where it pays callback gas. REACT lives on Reactive Network,
+and no contract can move value between the two without a bridge, so today the operator sweeps fee income into REACT by hand and tops
+up the reactive contract (anyone can). At 0.016 REACT per reaction and about 5 reactions per pinned-topic bounty, one 0.00002 ETH posting
+fee buys far more REACT than a bounty uses at 17 Nov prices.
+
 ## Post one without writing code
 
 `web/index.html` is a one-page template picker: "pay whoever first runs job N", "pay whoever first wraps X ETH", "any event"
 (contract + event signature + winner topic), or "I judge it". It shows the exact proof condition and the fee before you sign, sends
-one transaction from your browser wallet on Base Sepolia, and lists the latest bounties straight from the escrow.
+one transaction from your browser wallet on Base Sepolia, and lists the latest bounties straight from the escrow logs. An optional
+"Only pay this address" field posts with the front-running guard. The list is also written into the HTML by `script/snapshot.py`
+(chain logs, no keys), so it reads without JavaScript; the live script then refreshes it.
 
 ## Run it yourself
 
 ```shell
-forge test                                   # 48 tests + 6 invariants, see below
-./script/mutants.sh                          # 10 planted bugs; the suite must kill every one
+forge test                                   # 59 tests + 7 invariants, see below
+./script/mutants.sh                          # 13 planted bugs; the suite must kill every one
 ./script/fund.sh lreact 0.02                 # Sepolia ETH -> Lasna lREACT (Reactive's faucet contract)
 ./script/fund.sh base 0.01                   # Sepolia ETH -> Base Sepolia (L1StandardBridge)
 RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
@@ -147,7 +195,9 @@ RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
 
 The scripts read a testnet key from an env file (`RX_TN_KEY`, `RX_TN_ADDR`; optionally a second key `RX_KEEPER_KEY` for the keeper).
 
-Tests (`forge test`): **48 tests and 6 invariants**, all passing.
+Tests (`forge test`): **59 tests and 7 invariants**, all passing. `test/HandshakeFrontRun.t.sol` (11): a copied job tx is ignored and the
+claimant is still paid; a once-only job copied first can only refund; the escrow refuses an off-list winner even if the watcher were
+wrong; the allowlist is emitted before the condition; only the issuer can restrict; `fundedUntil()` from balance, debt and rate.
 - `test/Handshake.t.sol` (10): the full cross-chain flows through a mocked system contract and callback proxy: proof payout, filters,
   deadline refund, accept stops expiry, late proof refunds, forged callbacks, duplicate callback, fee isolation, shared subscription.
 - `test/HandshakeMore.t.sol` (30): posting rules and the fee (minimum, exact split, fees pay callback gas, refund without fee),
@@ -157,17 +207,17 @@ Tests (`forge test`): **48 tests and 6 invariants**, all passing.
   late proofs never pay.
 - `test/HandshakeToken.t.sol` (8): USDC proof payout across chains, USDC refund by cron, exact ETH fee for token posts, missing
   allowance, bad token addresses, fee-on-transfer tokens, separate ETH/token books, and a fuzz test over amounts and transfer fees.
-- `test/HandshakeInvariant.t.sol` (6 invariants, 64 runs x 50 random calls: ETH and USDC posts, claims, accepts, cancels, time jumps,
+- `test/HandshakeInvariant.t.sol` (7 invariants, 64 runs x 50 random calls: ETH and USDC posts, claims, accepts, cancels, time jumps,
   proof and expiry callbacks including duplicates and wrong ids, public expiry, gas bills): the vault always equals the open bounties;
   money is conserved; no bounty is closed twice or changes after closing; callback gas is billed only from fees; the token books balance
-  even with a 1 % fee-on-transfer USDC.
-- `script/mutants.sh`: 10 planted bugs (a missing balance update on payout or refund, no "still open" check, paying after the deadline,
-  early expiry, the fee leaking into the vault, no minimum, token books, trusting the requested token amount, no exact fee). The suite
-  kills all 10.
+  even with a 1 % fee-on-transfer USDC; a restricted bounty never pays an address off its allowlist.
+- `script/mutants.sh`: 13 planted bugs (a missing balance update on payout or refund, no "still open" check, paying after the deadline,
+  early expiry, the fee leaking into the vault, no minimum, token books, trusting the requested token amount, no exact fee, the escrow
+  or the watcher letting an off-list winner through, the allowlist emitted after the condition). The suite kills all 13.
 
 ## Limits
 
-- Testnets only. Native ETH bounties only (ERC-20 is next).
+- Testnets only.
 - The posting fee covers callback gas on the escrow chain; REACT for the reactive contract is topped up by the operator. A
   mainnet run costs cents in REACT (0.002 USD each at 17 Nov prices), but needs REACT bought and bridged first.
 - A wildcard proof on a busy contract (like WETH9) runs `react()` for every matching log until it pays, so keep such deadlines short.

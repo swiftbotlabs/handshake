@@ -23,6 +23,7 @@ contract EscrowHandler is Test {
     mapping(uint256 => uint256) public closeCount; // how many times each bounty left Open (must stay <= 1)
     uint256 public maxCloseCount;
     bool public closedBountyChanged; // a Paid/Refunded bounty must never change status again
+    bool public paidNotAllowed; // a restricted bounty paid an address off its allowlist
 
     constructor(HandshakeEscrow esc_, address proxy_, address rx_) {
         esc = esc_;
@@ -56,6 +57,10 @@ contract EscrowHandler is Test {
             if (++closeCount[id] > maxCloseCount) maxCloseCount = closeCount[id];
         }
         if (a != HandshakeEscrow.Status.Open && a != HandshakeEscrow.Status.None && b != a) closedBountyChanged = true;
+        if (a == HandshakeEscrow.Status.Open && b == HandshakeEscrow.Status.Paid && esc.restricted(id)) {
+            (,,,,, address w,) = esc.bounties(id);
+            if (!esc.allowed(id, w)) paidNotAllowed = true;
+        }
     }
 
     function postJudged(uint256 who, uint256 value, uint256 dt) external {
@@ -80,6 +85,24 @@ contract EscrowHandler is Test {
         vm.deal(a, value);
         vm.prank(a);
         esc.postProof{ value: value }("p", block.timestamp + dt, c);
+        ghostPosted += value - esc.postFee();
+        ghostFees += esc.postFee();
+    }
+
+    /// A restricted PROOF bounty: only actor 0 may be paid; proof callbacks name random actors (front-runners included).
+    function postProofRestricted(uint256 who, uint256 value, uint256 dt) external {
+        address a = _actor(who);
+        value = bound(value, esc.minBounty() + esc.postFee(), 5 ether);
+        dt = bound(dt, 1, 30 days);
+        HandshakeEscrow.Condition memory c = HandshakeEscrow.Condition({
+            chainId: 11155111, emitter: address(0x1234), topic0: 1, matchTopic1: true, topic1: 4, winnerTopic: 2, minValue: 0
+        });
+        address[] memory list = new address[](1);
+        list[0] = actors[0];
+        uint256 deadline = block.timestamp + dt;
+        vm.deal(a, value);
+        vm.prank(a);
+        esc.postProofFor{ value: value }("r", deadline, c, list);
         ghostPosted += value - esc.postFee();
         ghostFees += esc.postFee();
     }
@@ -203,6 +226,11 @@ contract HandshakeInvariantTest is Test {
     function invariant_neverClosedTwice() public view {
         assertLe(h.maxCloseCount(), 1);
         assertFalse(h.closedBountyChanged());
+    }
+
+    /// A restricted bounty never pays anyone off its allowlist, whatever the callbacks claim.
+    function invariant_restrictedPaysOnlyAllowed() public view {
+        assertFalse(h.paidNotAllowed());
     }
 
     /// ERC-20 books: the vault's token balance always equals the open token bounties, and token money is conserved

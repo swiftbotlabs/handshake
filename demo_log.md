@@ -13,3 +13,12 @@
 - 2026-11-17T21:45:38Z v3 U2 keeper runs job 1794951884 0x3d368f8b9830dd38a0f509f4bfa04f7dd85222081114ef14fa8904b9beb07703 0x1
 - PAID (v3, ETH): id=1 to the keeper, Lasna ProofSeen 0x214e6efa1e90ed2a2ed1bf7ed9e5d5df05606068cdeba1e8749cffb952e587b0, Base Sepolia 0xabd7d9637764a2485a051d1b8884da3d953853b2fbfd5b6397392c5b34b9337e. Block times: job 21:44:24 -> paid 21:44:26 UTC (+2 s).
 - PAID (v3, USDC): id=2, 5 USDC (Circle test USDC 0x036CbD53...) to the keeper; Lasna ProofSeen 0xe7e69a803bca706b511db495481563c5ba0249a032a98b11de6b51def5acc369, Base Sepolia BountyPaid 0x1bf02decfc9892c9bea0ecd74ed5d31efaca5b6e375cc3c2f25180c5ee5a87c9. Block times: job 21:45:36 -> paid 21:45:37 UTC (+1 s). Keeper USDC balance 0 -> 5.000000.
+
+### v4 D) front-run test (escrow 0x43eE856817a3Bac8EfcCaD54355b1de9C97aeAA5, reactive 0x8907Bda54e22fDaC6A751e5f84DCAe95E6e4c579)
+- 2026-11-17T22:03:46Z v4 D1 postProofFor, allowlist = keeper 0x950B75A737993033108015974dDcDdC39185BBf3 (Base Sepolia) 0xdbcc68de8b2ec2c07941fe3934e336cbe46ea2bae0bc838dc09a22a6b99a2177 0x1
+- 2026-11-17T22:03:55Z v4 D2 watcher ready: Lasna allowed(id=1, keeper)=true, WETH subscription live
+- 2026-11-17T22:04:02Z v4 D3 FRONT-RUNNER 0x285c41Ec18f602e418EF07F809b9f5B993980567 wraps first (Ethereum Sepolia) 0x0f5ebe2d9ba48f2a8320fdd08d0be59235db137108850f6893cd8a3de49ce5a4 0x1
+- 2026-11-17T22:05:01Z v4 D4 keeper 0x950B75A737993033108015974dDcDdC39185BBf3 wraps (Ethereum Sepolia) 0x5d0ccd5452d280711cbf50fd42e1566221e72ea24ae5591380b56ce6a30d11bc 0x1
+- IGNORED (v4 D, bot): Lasna ProofIgnored id=1 named 0x285c41ec... (our test bot) tx 0xd084bc716d15ef494d9e4dbb9b4ab888dd52669e36e2b5138405734c678cd383; no callback.
+- IGNORED (v4 D, stranger): Lasna ProofIgnored id=1 named 0x6acf89a6... (not ours, wrapped 0.001 ETH, Sepolia tx 0xfc895a7d50fc1444097118d9d4b2fcbdd65ed9ec60f877a4bd1104cabe5c844d) tx 0x82b0a2ffec77e900abbfe88b4428b23f2c6b131b392d24925868996c7a99365b; no callback.
+- PAID (v4 D): id=1 0.0001 ETH to the keeper; Lasna ProofSeen 0x3354c621e25ea847eac885d1ad697d38c58bcb3804d2df140e5cde854a8a05f4, Base Sepolia BountyPaid 0xaa5cd34e52fed32ed235e9ef8e35a051550bed39786d00cffea7bd89459ab1f3. Block times: keeper wrap 22:05:00 -> paid 22:05:02 UTC (+2 s). Reactive balance 0.15 -> 0.0057 lREACT over the run.

@@ -4,6 +4,8 @@ pragma solidity ^0.8.29;
 import { ISystemContract } from "@reactive/src/interfaces/ISystemContract.sol";
 import { IReactive } from "@reactive/src/interfaces/IReactive.sol";
 import { AbstractReactive } from "@reactive/src/base/AbstractReactive.sol";
+import { AbstractPayer } from "@reactive/src/base/AbstractPayer.sol";
+import { IPayer } from "@reactive/src/interfaces/IPayer.sol";
 
 /// @title HandshakeReactive
 /// @notice Runs on Reactive Network. Watches a HandshakeEscrow on its chain and does the two jobs nobody wants to babysit:
@@ -20,6 +22,7 @@ contract HandshakeReactive is AbstractReactive {
         uint256(keccak256("ProofCondition(uint256,uint256,address,uint256,bool,uint256,uint8,uint256)"));
     uint256 public constant PAID_TOPIC_0 = uint256(keccak256("BountyPaid(uint256,address,uint256,uint8,bytes32)"));
     uint256 public constant REFUNDED_TOPIC_0 = uint256(keccak256("BountyRefunded(uint256,address,uint256,uint8)"));
+    uint256 public constant ALLOWED_TOPIC_0 = uint256(keccak256("ClaimantAllowed(uint256,address)"));
 
     uint64 internal constant CALLBACK_GAS = 400_000;
     uint256 internal constant MAX_EXPIRIES_PER_TICK = 16;
@@ -52,6 +55,11 @@ contract HandshakeReactive is AbstractReactive {
     event ExpiryRequested(uint256 indexed id, uint256 deadline);
     event Closed(uint256 indexed id);
     event CronSwitched(bool on);
+    /// @notice A proof named an address that is not on the bounty's allowlist (e.g. a bot that copied the job tx).
+    ///         No callback is sent, so a front-runner costs no destination gas and cannot block the real claimant.
+    event ProofIgnored(uint256 indexed id, address indexed named, uint256 indexed txHash);
+    event Funded(address indexed from, uint256 amount);
+    event BurnRateSet(uint256 costPerTick, uint256 secondsPerTick);
 
     address public immutable owner;
     uint256 public escrowChainId;
@@ -64,6 +72,11 @@ contract HandshakeReactive is AbstractReactive {
     mapping(uint256 => uint256) internal _openIndex; // id => index + 1
     mapping(bytes32 => uint256[]) internal _byKey; // condition key => proof bounty ids (closed ones are skipped lazily)
     mapping(bytes32 => uint256) public keyRefs; // open bounties per condition key; subscription lives while > 0
+    mapping(uint256 => bool) public restricted; // mirrored from ClaimantAllowed
+    mapping(uint256 => mapping(address => bool)) public allowed;
+    /// @notice Measured cost of one idle Cron1000 tick and the tick period, for fundedUntil(). Set from on-chain data.
+    uint256 public costPerTick;
+    uint256 public secondsPerTick;
 
     constructor() payable {
         owner = msg.sender;
@@ -85,6 +98,7 @@ contract HandshakeReactive is AbstractReactive {
         SYSTEM.subscribe(chainId_, escrow_, CONDITION_TOPIC_0, REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
         SYSTEM.subscribe(chainId_, escrow_, PAID_TOPIC_0, REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
         SYSTEM.subscribe(chainId_, escrow_, REFUNDED_TOPIC_0, REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
+        SYSTEM.subscribe(chainId_, escrow_, ALLOWED_TOPIC_0, REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
         _setCron(true);
         emit EscrowLinked(chainId_, escrow_);
     }
@@ -96,6 +110,28 @@ contract HandshakeReactive is AbstractReactive {
 
     function coverDebt() external {
         _coverDebt();
+    }
+
+    /// @notice Anyone can top up the REACT that pays for ticks and callbacks (e.g. the operator, from posting fees).
+    receive() external payable override(AbstractPayer, IPayer) {
+        emit Funded(msg.sender, msg.value);
+    }
+
+    function setBurnRate(uint256 costPerTick_, uint256 secondsPerTick_) external onlyOwner {
+        costPerTick = costPerTick_;
+        secondsPerTick = secondsPerTick_;
+        emit BurnRateSet(costPerTick_, secondsPerTick_);
+    }
+
+    /// @notice Until when the deadline cron is paid for at the measured idle rate: (balance - debt) / costPerTick ticks.
+    ///         Posters compare it with their deadline; past it, refunds fall back to the public expire().
+    ///         type(uint256).max when the cron is off or no rate is set (nothing is being billed per tick).
+    function fundedUntil() public view returns (uint256) {
+        if (!cronOn || costPerTick == 0) return type(uint256).max;
+        uint256 owed = SYSTEM.debt(address(this));
+        uint256 bal = address(this).balance;
+        if (bal <= owed) return block.timestamp;
+        return block.timestamp + ((bal - owed) / costPerTick) * secondsPerTick;
     }
 
     function openCount() external view returns (uint256) {
@@ -114,6 +150,7 @@ contract HandshakeReactive is AbstractReactive {
             if (log_.topic0 == POSTED_TOPIC_0) _onPosted(log_);
             else if (log_.topic0 == CONDITION_TOPIC_0) _onCondition(log_);
             else if (log_.topic0 == PAID_TOPIC_0 || log_.topic0 == REFUNDED_TOPIC_0) _close(log_.topic1);
+            else if (log_.topic0 == ALLOWED_TOPIC_0) _onAllowed(log_);
             return;
         }
         _onProofCandidate(log_);
@@ -153,6 +190,11 @@ contract HandshakeReactive is AbstractReactive {
         if (keyRefs[key]++ == 0) {
             SYSTEM.subscribe(chainId, emitter, topic0, matchTopic1 ? topic1 : REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
         }
+    }
+
+    function _onAllowed(LogRecord calldata log_) internal {
+        restricted[log_.topic1] = true;
+        allowed[log_.topic1][address(uint160(log_.topic2))] = true;
     }
 
     function _close(uint256 id_) internal {
@@ -206,6 +248,10 @@ contract HandshakeReactive is AbstractReactive {
             uint256 raw = c.winnerTopic == 1 ? log_.topic1 : (c.winnerTopic == 2 ? log_.topic2 : log_.topic3);
             address winner = address(uint160(raw));
             if (winner == address(0)) continue;
+            if (restricted[id] && !allowed[id][winner]) {
+                emit ProofIgnored(id, winner, log_.txHash);
+                continue;
+            }
             w.requestedAt = block.timestamp;
             ++sent;
             emit ProofSeen(id, winner, log_.txHash);
