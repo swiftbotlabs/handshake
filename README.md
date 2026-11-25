@@ -3,6 +3,10 @@
 Post a bounty and walk away. Handshake pays the winner the moment the chain proves the work was done, on whichever chain it
 happened, and refunds you by itself if the deadline passes. No keeper bot, no server, no reminder in your calendar.
 
+**On chain so far (testnets): 9 proofs seen, 7 paid, 2 ignored by design, 4 unattended refunds, 0 stuck; median 2 s proof to payout (max 2 s).** Every loop with every hash, rebuilt from chain data by a script:
+[evidence/EVIDENCE.md](evidence/EVIDENCE.md) ([CSV](evidence/triples.csv)). Replay any loop locally without sending anything:
+`./script/dryrun.sh v5 2`.
+
 Built on [Reactive Network](https://reactive.network) for the Reactive Omni Buildathon (track: Set It and Forget It).
 
 ![How Handshake works](docs/diagram.png)
@@ -204,7 +208,7 @@ one transaction from your browser wallet on Base Sepolia, and lists the latest b
 ## Run it yourself
 
 ```shell
-forge test                                   # 69 tests + 7 invariants, see below
+forge test                                   # 84 tests + 7 invariants (the dry-run replay is skipped unless run by dryrun.sh)
 ./script/mutants.sh                          # 16 planted bugs; the suite must kill every one
 ./script/fund.sh lreact 0.02                 # Sepolia ETH -> Lasna lREACT (Reactive's faucet contract)
 ./script/fund.sh base 0.01                   # Sepolia ETH -> Base Sepolia (L1StandardBridge)
@@ -215,7 +219,10 @@ RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
 
 The scripts read a testnet key from an env file (`RX_TN_KEY`, `RX_TN_ADDR`; optionally a second key `RX_KEEPER_KEY` for the keeper).
 
-Tests (`forge test`): **69 tests and 7 invariants**, all passing. `test/HandshakeFees.t.sol` (7): fees above the floor
+Tests (`forge test`): **84 tests and 7 invariants**, all passing; coverage of src/: 334/334 lines, 100/101 branches, 51/51 functions
+(`script/coverage.sh`; the one branch left is a vault transfer that cannot fail). `test/HandshakeGuards.t.sol` (16) and
+`test/HandshakeCoverage.t.sol` (5): every guard branch (duplicate deliveries, malformed proof logs, retry spacing, refused ETH and
+ERC-20 payouts, allowlisted token bounties, debt cover). `test/HandshakeReplay.t.sol`: the dry-run replay of a real loop (`script/dryrun.sh`). `test/HandshakeFees.t.sol` (7): fees above the floor
 fund the watcher, auto every 10 fees, never bounty money, a broken funder never blocks a post. `HandshakeLiquidationTest` (3): an
 Aave-style `LiquidationCall` pays the liquidator from data word 2; a small liquidation or a non-address word never pays. `test/HandshakeFrontRun.t.sol` (11): a copied job tx is ignored and the
 claimant is still paid; a once-only job copied first can only refund; the escrow refuses an off-list winner even if the watcher were

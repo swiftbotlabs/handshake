@@ -3,3 +3,5 @@ cache/
 broadcast/
 .env
 *.env
+evidence/.cache/
+__pycache__/

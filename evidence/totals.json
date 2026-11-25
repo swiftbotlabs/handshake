@@ -1,0 +1,39 @@
+{
+ "generated_utc": "2026-11-25 11:50:57",
+ "latest_blocks": {
+  "84532": 63427932,
+  "5318007": 9214970
+ },
+ "base": {
+  "proofs": 9,
+  "paid": 7,
+  "ignored": 2,
+  "cron": 4,
+  "skipped": 0,
+  "stuck": 0,
+  "inflight": 0,
+  "issuer": 1,
+  "open": 0,
+  "orphan": 0,
+  "median": 2,
+  "max": 2,
+  "rows": 14
+ },
+ "lasna_dest": {
+  "proofs": 1,
+  "paid": 0,
+  "ignored": 0,
+  "cron": 0,
+  "skipped": 0,
+  "stuck": 1,
+  "inflight": 0,
+  "issuer": 1,
+  "open": 1,
+  "orphan": 0,
+  "median": null,
+  "max": null,
+  "rows": 3
+ },
+ "totals_line": "9 proofs seen, 7 paid, 2 ignored by design, 4 unattended refunds, 0 stuck; median 2 s proof to payout (max 2 s)",
+ "rows": 17
+}
