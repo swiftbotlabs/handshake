@@ -18,7 +18,7 @@ if [ "${HS_REHEARSAL:-0}" = 1 ]; then
   [ "$(cast chain-id --rpc-url $RN)" = 1597 ] && [ "$(cast chain-id --rpc-url $BASE)" = 8453 ] || { echo "forks are not 1597/8453"; exit 2; }
   LOG=${REHEARSAL_LOG:?}; OUT=${REHEARSAL_OUT:?}
 fi
-loadkey() { if [ "${HS_REHEARSAL:-0}" = 1 ]; then : "${HS_MAIN_KEY:?}"; else set -a; . /home/agent/agent/secrets/handshake_mainnet.env; set +a; fi; }
+loadkey() { if [ "${HS_REHEARSAL:-0}" = 1 ]; then : "${HS_MAIN_KEY:?}"; else set -a; . /home/agent/agent/secrets/handshake_mainnet.env; set +a; HS_MAIN_KEY=${HS_MAIN_KEY:-${HANDSHAKE_MAINNET_PK:?no mainnet key}}; fi; }
 PROXY=0xCc780DdE33f56f55dE778D42c930959374a4a068          # Base callback proxy (dev.reactive.network/origins-and-destinations, 11-18)
 POOL=0xA238Dd80C259a72e81d7e4664a9801593F98d1c5           # Aave v3 Pool on Base
 USDC=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913           # USDC on Base

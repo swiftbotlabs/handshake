@@ -8,7 +8,7 @@ LASNA=https://lasna-rpc.rnk.dev/
 BASE_SEP=${BASE_SEP_RPC:-https://sepolia.base.org}
 ETH_SEP=${ETH_SEP_RPC:-https://ethereum-sepolia-rpc.publicnode.com}
 BASE_SEP_PROXY=0x476F44b11F5C942c58f4c8E3d0300E5710743585
-OUT=deployments.json
+OUT=${OUT:-deployments.json}   # v6: OUT=deployments-v6.json (keeps v5 in deployments.json)
 [ -f "$OUT" ] || echo '{}' > "$OUT"
 save() { python3 -I -c "import json,sys;d=json.load(open('$OUT'));d[sys.argv[1]]=sys.argv[2];json.dump(d,open('$OUT','w'),indent=1)" "$1" "$2"; echo "$1=$2"; }
 get() { python3 -I -c "import json,sys;print(json.load(open('$OUT')).get(sys.argv[1],''))" "$1"; }
