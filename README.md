@@ -98,7 +98,8 @@ escrow (Base Sepolia) `0x1cD6c715f1b5579161864361e275e250a11c8004`. Nobody touch
 | **Unattended refund:** judged bounty, deadline 23:10:01, nobody claims | none | [Cron1000 tick, ExpiryRequested](https://lasna.reactscan.net/tx/0xe451e8f1b7053a141395f964aeafaf2a0332231c63849ee520afcba6f1563d39) 23:17:11 | [BountyRefunded](https://sepolia.basescan.org/tx/0x04074579df25c7d9f0ccb63f27a5025e6947c9d89b1a2e7dcce4c2bcbdf28083) 23:17:14 | next tick |
 | **Fees → REACT:** `fundReactive()` | | watcher +0.00381041 lREACT (exactly 100 x the swept fees) | [fundReactive](https://sepolia.basescan.org/tx/0x949f738aac196727633099a42fdd336799429b2b4b37a89b8847d261289f9fa5): 0.0000381 ETH of fee surplus to Reactive's faucet | |
 
-The v5 cron runs unattended; `fundedUntil()` on the reactive contract shows how long its REACT lasts at the idle rate.
+The v5 cron runs unattended; `fundedUntil()` on the v5 reactive contract shows how long its REACT lasts at the idle rate. The code in `main`
+(v6, tested, not yet deployed) also budgets proof events and caps their rate: see "Runway that counts events" below.
 
 Every earlier deployment ran end to end too (v4 above, v3, v2, v1 below). Times are **block timestamps**; `./script/latency.sh <origin tx> <lasna tx> <payout tx>`
 recomputes any row from public RPCs.
@@ -164,7 +165,8 @@ same token. Tested with a 6-decimal USDC look-alike, including a 1 % fee-on-tran
 ## Trust limits and REACT runway
 
 What the operator (the deployer key) can do: link the escrow once (`linkEscrow`), switch the cron on or off (`setCron`), set the measured
-burn rate that `fundedUntil()` uses (`setBurnRate`), and top up REACT. Anyone can top up REACT too (a plain transfer emits `Funded`).
+burn rates that `fundedUntil()` uses (`setBurnRate`), tune the event cap within fixed bounds (`setEventCap`, v6; it cannot be
+switched off), and top up REACT. Anyone can top up REACT too (a plain transfer emits `Funded`).
 What nobody can do: move bounty money anywhere except to the proven winner, the accepted claimant, or back to the issuer. There is no
 admin withdraw, no upgrade proxy, no pause on payouts.
 
@@ -188,6 +190,25 @@ public `expire()`. It returns "unbounded" while the cron is off, because nothing
 front-run run above used 0.144 lREACT for about 9 reactions (3 escrow events, 5 WETH deposits seen in the minute the wildcard subscription
 was live, 1 close), about 0.016 lREACT per reaction including the callback request.
 
+**Runway that counts events (v6, in `main`, not yet deployed).** Reactive bills every log a subscription delivers, about 0.0125 lREACT each
+on Lasna, whether or not it pays anyone. On 22 Nov a test bounty on every WETH9 `Deposit` on Sepolia drained a watcher in 2.5 hours while
+the ticks-only `fundedUntil()` still showed days. An allowance alone cannot fix that, because nobody knows in advance how busy an event will
+be; a cap alone leaves the published number wrong. v6 does both:
+- **Event cap per subscription.** Each proof subscription may bill at most `maxEventsPerWindow` logs per `eventWindow` (default 10 per
+  hour). The 11th log in a window unsubscribes it (`ProofThrottled`); the first cron tick after the window re-subscribes it with the same
+  filter (`ProofResumed`). The bounty stays open and still refunds by itself at the deadline. A pinned proof ("run job 4244") sees one or
+  two logs in its life and is never throttled; a busy wildcard event stops costing money within one log of the cap. The cap can be tuned
+  (1-1000 logs, 1 minute to 1 day) but never switched off.
+- **`fundedUntil()` at the worst case.** `burnPerPeriod()` = one idle tick + every open proof subscription at its full cap
+  (`liveKeys x (cap + 1) x costPerEvent`, the +1 being the log that trips it). `fundedUntil()` = `(balance - debt) / burnPerPeriod` whole
+  periods. At Lasna prices one open subscription adds about 0.040 lREACT per tick to the 0.0112 idle cost, so 1 lREACT shows about
+  5.5 hours instead of 26. That is a floor, not a guess: the watcher cannot go short before it.
+- **Proof:** `test/HandshakeRunway.t.sol` replays the 22 Nov incident: a busy event at 300 logs an hour against a 1 lREACT watcher,
+  billed the way Reactive bills (every delivered log while subscribed, every tick). With the cap, the balance lasts at least until the
+  published `fundedUntil()` and over 90 % of the logs never reach the bill. The control, with the cap loosened to its widest setting, goes
+  short in under 4 hours, long before the ticks-only runway it would have shown. `script/mutants.sh` plants 5 bugs in this code (cap never
+  pauses, `fundedUntil()` ignores events, double unsubscribe on close, early resume, uncounted subscriptions); the suite kills all 5.
+
 **Fees to REACT, on chain (v5).** The posting fee is collected in ETH on the escrow chain. The escrow keeps a fixed `gasFloor` for callback
 gas, and everything above it is fee income: `fundReactive()` (anyone may call it, and it also runs by itself once 10 fees have piled up)
 sends that surplus to `reactFunder`, which credits REACT to the reactive contract's address on Reactive Network. On the testnets
@@ -208,8 +229,8 @@ one transaction from your browser wallet on Base Sepolia, and lists the latest b
 ## Run it yourself
 
 ```shell
-forge test                                   # 84 tests + 7 invariants (the dry-run replay is skipped unless run by dryrun.sh)
-./script/mutants.sh                          # 16 planted bugs; the suite must kill every one
+forge test                                   # 94 tests + 7 invariants (the dry-run replay is skipped unless run by dryrun.sh)
+./script/mutants.sh                          # 21 planted bugs; the suite must kill every one
 ./script/fund.sh lreact 0.02                 # Sepolia ETH -> Lasna lREACT (Reactive's faucet contract)
 ./script/fund.sh base 0.01                   # Sepolia ETH -> Base Sepolia (L1StandardBridge)
 RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
@@ -219,7 +240,7 @@ RX_FUND=1.5ether ESC_FUND=0.002ether ./script/deploy.sh
 
 The scripts read a testnet key from an env file (`RX_TN_KEY`, `RX_TN_ADDR`; optionally a second key `RX_KEEPER_KEY` for the keeper).
 
-Tests (`forge test`): **84 tests and 7 invariants**, all passing; coverage of src/: 334/334 lines, 100/101 branches, 51/51 functions
+Tests (`forge test`): **94 tests and 7 invariants**, all passing; coverage of src/: 387/387 lines, 116/117 branches, 56/56 functions
 (`script/coverage.sh`; the one branch left is a vault transfer that cannot fail). `test/HandshakeGuards.t.sol` (16) and
 `test/HandshakeCoverage.t.sol` (5): every guard branch (duplicate deliveries, malformed proof logs, retry spacing, refused ETH and
 ERC-20 payouts, allowlisted token bounties, debt cover). `test/HandshakeReplay.t.sol`: the dry-run replay of a real loop (`script/dryrun.sh`). `test/HandshakeFees.t.sol` (7): fees above the floor
@@ -227,6 +248,7 @@ fund the watcher, auto every 10 fees, never bounty money, a broken funder never 
 Aave-style `LiquidationCall` pays the liquidator from data word 2; a small liquidation or a non-address word never pays. `test/HandshakeFrontRun.t.sol` (11): a copied job tx is ignored and the
 claimant is still paid; a once-only job copied first can only refund; the escrow refuses an off-list winner even if the watcher were
 wrong; the allowlist is emitted before the condition; only the issuer can restrict; `fundedUntil()` from balance, debt and rate.
+`test/HandshakeRunway.t.sol` (10): the event cap and the event-aware runway (above), including the 22 Nov drain replay and its control.
 - `test/Handshake.t.sol` (10): the full cross-chain flows through a mocked system contract and callback proxy: proof payout, filters,
   deadline refund, accept stops expiry, late proof refunds, forged callbacks, duplicate callback, fee isolation, shared subscription.
 - `test/HandshakeMore.t.sol` (30): posting rules and the fee (minimum, exact split, fees pay callback gas, refund without fee),
@@ -243,7 +265,8 @@ wrong; the allowlist is emitted before the condition; only the issuer can restri
 - `script/mutants.sh`: 16 planted bugs (a missing balance update on payout or refund, no "still open" check, paying after the deadline,
   early expiry, the fee leaking into the vault, no minimum, token books, trusting the requested token amount, no exact fee, the escrow
   or the watcher letting an off-list winner through, the allowlist emitted after the condition, a fee sweep that ignores the gas floor or credits the caller, a data-word
-  winner that accepts a non-address). The suite kills all 16.
+  winner that accepts a non-address; and in v6 a cap that never pauses, a `fundedUntil()` that ignores events, a double unsubscribe on
+  close, an early resume, uncounted subscriptions). The suite kills all 21.
 
 ## Limits
 

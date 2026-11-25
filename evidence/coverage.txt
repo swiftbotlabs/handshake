@@ -1,8 +1,8 @@
-forge coverage --report summary (forge Version: 1.8.5), 2026-11-25T11:50:41Z
-Ran 12 test suites in 1.93s (3.96s CPU time): 91 tests passed, 0 failed, 1 skipped (92 total tests)
+forge coverage --report summary (forge Version: 1.8.5), 2026-11-25T13:54:41Z
+Ran 13 test suites in 1.94s (3.79s CPU time): 101 tests passed, 0 failed, 1 skipped (102 total tests)
 | File                      | % Lines           | % Statements      | % Branches       | % Funcs         |
 | src/HandshakeEscrow.sol   | 100.00% (188/188) | 99.59% (240/241)  | 98.08% (51/52)   | 100.00% (30/30) |
-| src/HandshakeReactive.sol | 100.00% (142/142) | 100.00% (183/183) | 100.00% (47/47)  | 100.00% (20/20) |
+| src/HandshakeReactive.sol | 100.00% (195/195) | 100.00% (251/251) | 100.00% (63/63)  | 100.00% (25/25) |
 | src/demo/KeeperJobs.sol   | 100.00% (4/4)     | 100.00% (3/3)     | 100.00% (2/2)    | 100.00% (1/1)   |
-| Total                     | 100.00% (334/334) | 99.77% (426/427)  | 99.01% (100/101) | 100.00% (51/51) |
+| Total                     | 100.00% (387/387) | 99.80% (494/495)  | 99.15% (116/117) | 100.00% (56/56) |
 MISS branch src/HandshakeEscrow.sol:328  if (!ok) revert TransferFailed();

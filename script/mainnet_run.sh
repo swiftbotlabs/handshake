@@ -31,7 +31,7 @@ deploy)
   if [ "$(cast call --rpc-url $RN $(get reactive) 'escrow()(address)')" = "0x0000000000000000000000000000000000000000" ]; then
     h=$(cast send --rpc-url $RN --private-key "$HS_MAIN_KEY" --gas-price 100gwei $(get reactive) 'linkEscrow(uint256,address)' 8453 $(get escrow) --json | python3 -I -c "import json,sys;print(json.load(sys.stdin)['transactionHash'])")
     note "linkEscrow (Reactive mainnet) $h"
-    h=$(cast send --rpc-url $RN --private-key "$HS_MAIN_KEY" --gas-price 100gwei $(get reactive) 'setBurnRate(uint256,uint256)' 11200000000000000 1053 --json | python3 -I -c "import json,sys;print(json.load(sys.stdin)['transactionHash'])")
+    h=$(cast send --rpc-url $RN --private-key "$HS_MAIN_KEY" --gas-price 100gwei $(get reactive) 'setBurnRate(uint256,uint256,uint256)' 11200000000000000 1053 12500000000000000 --json | python3 -I -c "import json,sys;print(json.load(sys.stdin)['transactionHash'])")
     note "setBurnRate $h"
   fi
   note "deployed: reactive $(get reactive) (Reactive mainnet 1597), escrow $(get escrow) (Base 8453); fundedUntil $(cast call --rpc-url $RN $(get reactive) 'fundedUntil()(uint256)')" ;;

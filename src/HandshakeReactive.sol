@@ -36,6 +36,13 @@ contract HandshakeReactive is AbstractReactive {
         uint256 requestedAt; // last time we asked the escrow to settle or refund; 0 = never
     }
 
+    /// Per-subscription event counter for the rate cap (one per condition key).
+    struct Rate {
+        uint64 windowStart;
+        uint32 count;
+        bool paused; // unsubscribed by the cap; re-subscribed on the first tick after the window
+    }
+
     struct Condition {
         uint256 chainId;
         address emitter;
@@ -48,6 +55,7 @@ contract HandshakeReactive is AbstractReactive {
 
     error NotOwner();
     error EscrowAlreadySet();
+    error BadCap();
 
     event EscrowLinked(uint256 indexed chainId, address indexed escrow);
     event Watching(uint256 indexed id, uint256 deadline, bool isProof);
@@ -59,7 +67,12 @@ contract HandshakeReactive is AbstractReactive {
     ///         No callback is sent, so a front-runner costs no destination gas and cannot block the real claimant.
     event ProofIgnored(uint256 indexed id, address indexed named, uint256 indexed txHash);
     event Funded(address indexed from, uint256 amount);
-    event BurnRateSet(uint256 costPerTick, uint256 secondsPerTick);
+    event BurnRateSet(uint256 costPerTick, uint256 secondsPerTick, uint256 costPerEvent);
+    event EventCapSet(uint256 maxEvents, uint256 window);
+    /// @notice A proof subscription saw more than maxEventsPerWindow logs in one window (a busy event). Reactive bills every
+    ///         delivered log, so the watcher unsubscribes it until the window ends; the bounty stays open and still refunds.
+    event ProofThrottled(bytes32 indexed key, uint256 resumeAt);
+    event ProofResumed(bytes32 indexed key);
 
     address public immutable owner;
     uint256 public escrowChainId;
@@ -77,6 +90,17 @@ contract HandshakeReactive is AbstractReactive {
     /// @notice Measured cost of one idle Cron1000 tick and the tick period, for fundedUntil(). Set from on-chain data.
     uint256 public costPerTick;
     uint256 public secondsPerTick;
+    /// @notice Measured cost of one delivered proof-candidate log (Reactive bills every log a subscription delivers).
+    uint256 public costPerEvent;
+    /// @notice Rate cap per proof subscription: at most maxEventsPerWindow billed logs per eventWindow seconds, then the
+    ///         subscription pauses until the window ends. This bounds the event bill, so fundedUntil() can budget for it.
+    uint256 public maxEventsPerWindow = 10;
+    uint256 public eventWindow = 1 hours;
+    /// @notice Proof subscriptions that are open (keyRefs > 0), paused or not: each may bill up to the cap.
+    uint256 public liveKeys;
+    mapping(bytes32 => Rate) public rates;
+    bytes32[] public pausedKeys;
+    uint256 internal constant MAX_RESUMES_PER_TICK = 8;
 
     constructor() payable {
         owner = msg.sender;
@@ -117,21 +141,45 @@ contract HandshakeReactive is AbstractReactive {
         emit Funded(msg.sender, msg.value);
     }
 
-    function setBurnRate(uint256 costPerTick_, uint256 secondsPerTick_) external onlyOwner {
+    function setBurnRate(uint256 costPerTick_, uint256 secondsPerTick_, uint256 costPerEvent_) external onlyOwner {
         costPerTick = costPerTick_;
         secondsPerTick = secondsPerTick_;
-        emit BurnRateSet(costPerTick_, secondsPerTick_);
+        costPerEvent = costPerEvent_;
+        emit BurnRateSet(costPerTick_, secondsPerTick_, costPerEvent_);
     }
 
-    /// @notice Until when the deadline cron is paid for at the measured idle rate: (balance - debt) / costPerTick ticks.
-    ///         Posters compare it with their deadline; past it, refunds fall back to the public expire().
-    ///         type(uint256).max when the cron is off or no rate is set (nothing is being billed per tick).
+    /// @notice The cap can be tuned but never switched off: without it the event bill, and so the runway, is unbounded.
+    function setEventCap(uint256 maxEvents_, uint256 window_) external onlyOwner {
+        if (maxEvents_ == 0 || maxEvents_ > 1000 || window_ < 60 || window_ > 1 days) revert BadCap();
+        maxEventsPerWindow = maxEvents_;
+        eventWindow = window_;
+        emit EventCapSet(maxEvents_, window_);
+    }
+
+    /// @notice Worst-case REACT billed per period (one cron tick): the idle tick, plus every open proof subscription
+    ///         delivering its full cap of logs. Unit: wei of REACT per `period` seconds.
+    function burnPerPeriod() public view returns (uint256 burn, uint256 period) {
+        period = secondsPerTick != 0 ? secondsPerTick : eventWindow;
+        if (cronOn) burn = costPerTick;
+        // +1: the log that trips the cap is already billed when the watcher sees it
+        burn += (liveKeys * (maxEventsPerWindow + 1) * costPerEvent * period) / eventWindow;
+    }
+
+    /// @notice Until when the watcher is paid for at its WORST-CASE rate: cron ticks plus every open proof subscription
+    ///         at its capped event rate. (balance - debt) / burnPerPeriod whole periods. A busy event cannot drain it
+    ///         sooner, because the cap unsubscribes a subscription that exceeds it. Posters compare it with their deadline;
+    ///         past it, refunds fall back to the public expire(). type(uint256).max when nothing is billed.
     function fundedUntil() public view returns (uint256) {
-        if (!cronOn || costPerTick == 0) return type(uint256).max;
+        (uint256 burn, uint256 period) = burnPerPeriod();
+        if (burn == 0) return type(uint256).max;
         uint256 owed = SYSTEM.debt(address(this));
         uint256 bal = address(this).balance;
         if (bal <= owed) return block.timestamp;
-        return block.timestamp + ((bal - owed) / costPerTick) * secondsPerTick;
+        return block.timestamp + ((bal - owed) / burn) * period;
+    }
+
+    function pausedCount() external view returns (uint256) {
+        return pausedKeys.length;
     }
 
     function openCount() external view returns (uint256) {
@@ -188,6 +236,7 @@ contract HandshakeReactive is AbstractReactive {
         bytes32 key = _key(chainId, emitter, topic0, matchTopic1, topic1);
         _byKey[key].push(id);
         if (keyRefs[key]++ == 0) {
+            ++liveKeys;
             SYSTEM.subscribe(chainId, emitter, topic0, matchTopic1 ? topic1 : REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE);
         }
     }
@@ -213,9 +262,14 @@ contract HandshakeReactive is AbstractReactive {
         if (c.chainId != 0) {
             bytes32 key = _key(c.chainId, c.emitter, c.topic0, c.matchTopic1, c.topic1);
             if (keyRefs[key] > 0 && --keyRefs[key] == 0) {
-                SYSTEM.unsubscribe(
-                    c.chainId, c.emitter, c.topic0, c.matchTopic1 ? c.topic1 : REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE
-                );
+                --liveKeys;
+                // a paused key is already unsubscribed; its pausedKeys entry is dropped lazily on the next tick
+                if (!rates[key].paused) {
+                    SYSTEM.unsubscribe(
+                        c.chainId, c.emitter, c.topic0, c.matchTopic1 ? c.topic1 : REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE
+                    );
+                }
+                delete rates[key];
                 delete _byKey[key];
             }
         }
@@ -226,8 +280,57 @@ contract HandshakeReactive is AbstractReactive {
 
     function _onProofCandidate(LogRecord calldata log_) internal {
         // A log can match a pinned-topic1 subscription and a wildcard one; check both keys.
-        _tryKey(log_, _key(log_.chainId, log_.contractAddress, log_.topic0, true, log_.topic1));
-        _tryKey(log_, _key(log_.chainId, log_.contractAddress, log_.topic0, false, 0));
+        bytes32 pinned = _key(log_.chainId, log_.contractAddress, log_.topic0, true, log_.topic1);
+        bytes32 wild = _key(log_.chainId, log_.contractAddress, log_.topic0, false, 0);
+        // Count the billed log against every live key it could have come through (over-counting is the safe side),
+        // and pause a key past its cap. The log itself is already paid for, so it is still evaluated below.
+        if (keyRefs[pinned] != 0) _meter(pinned);
+        if (keyRefs[wild] != 0) _meter(wild);
+        _tryKey(log_, pinned);
+        _tryKey(log_, wild);
+    }
+
+    function _meter(bytes32 key_) internal {
+        Rate storage r = rates[key_];
+        if (block.timestamp >= uint256(r.windowStart) + eventWindow) {
+            r.windowStart = uint64(block.timestamp);
+            r.count = 0;
+        }
+        if (++r.count > maxEventsPerWindow && !r.paused) {
+            r.paused = true;
+            pausedKeys.push(key_);
+            Condition storage c = conditions[_byKey[key_][0]];
+            SYSTEM.unsubscribe(
+                c.chainId, c.emitter, c.topic0, c.matchTopic1 ? c.topic1 : REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE
+            );
+            emit ProofThrottled(key_, uint256(r.windowStart) + eventWindow);
+        }
+    }
+
+    /// Re-subscribe paused keys whose window has ended; drop entries whose bounties all closed meanwhile.
+    function _resume() internal {
+        uint256 done;
+        uint256 i;
+        while (i < pausedKeys.length && done < MAX_RESUMES_PER_TICK) {
+            bytes32 key = pausedKeys[i];
+            Rate storage r = rates[key];
+            if (r.paused && block.timestamp < uint256(r.windowStart) + eventWindow) {
+                ++i;
+                continue;
+            }
+            ++done;
+            pausedKeys[i] = pausedKeys[pausedKeys.length - 1];
+            pausedKeys.pop();
+            if (!r.paused || keyRefs[key] == 0) continue; // closed while paused (rates deleted) : nothing to restore
+            r.paused = false;
+            r.windowStart = uint64(block.timestamp);
+            r.count = 0;
+            Condition storage c = conditions[_byKey[key][0]];
+            SYSTEM.subscribe(
+                c.chainId, c.emitter, c.topic0, c.matchTopic1 ? c.topic1 : REACTIVE_IGNORE, REACTIVE_IGNORE, REACTIVE_IGNORE
+            );
+            emit ProofResumed(key);
+        }
     }
 
     function _tryKey(LogRecord calldata log_, bytes32 key_) internal {
@@ -272,6 +375,7 @@ contract HandshakeReactive is AbstractReactive {
     // ------------------------------------------------------------------ deadlines
 
     function _onTick() internal {
+        if (pausedKeys.length != 0) _resume();
         uint256 n = openIds.length;
         uint256 sent;
         for (uint256 i; i < n && sent < MAX_EXPIRIES_PER_TICK; ++i) {

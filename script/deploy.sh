@@ -30,6 +30,6 @@ if [ "$(cast call --rpc-url $LASNA $(get reactive) 'escrow()(address)')" = "0x00
     | python3 -I -c "import json,sys;print('linkEscrow tx', json.load(sys.stdin)['transactionHash'])"
 fi
 [ "$(cast call --rpc-url $LASNA $(get reactive) 'costPerTick()(uint256)')" != 0 ] || \
-  cast send --rpc-url $LASNA --private-key "$RX_TN_KEY" --gas-price 100gwei "$(get reactive)" 'setBurnRate(uint256,uint256)' 11200000000000000 1053 --json \
+  cast send --rpc-url $LASNA --private-key "$RX_TN_KEY" --gas-price 100gwei "$(get reactive)" 'setBurnRate(uint256,uint256,uint256)' 11200000000000000 1053 12500000000000000 --json \
     | python3 -I -c "import json,sys;print('setBurnRate tx', json.load(sys.stdin)['transactionHash'])"
 echo "done: $(cat $OUT | tr -d '\n ')"

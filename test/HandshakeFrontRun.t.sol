@@ -160,7 +160,7 @@ contract HandshakeFrontRunTest is HandshakeBase {
 
     function test_fundedUntilFromBalanceAndMeasuredRate() public {
         assertEq(rx.fundedUntil(), type(uint256).max); // no rate set yet
-        rx.setBurnRate(0.0112 ether, 1053);
+        rx.setBurnRate(0.0112 ether, 1053, 0);
         vm.deal(address(rx), 0.92 ether);
         assertEq(rx.fundedUntil(), block.timestamp + 82 * 1053); // 0.92 / 0.0112 = 82 ticks ~ 1 day
         vm.mockCall(address(sys), abi.encodeWithSignature("debt(address)", address(rx)), abi.encode(1 ether));
@@ -168,7 +168,7 @@ contract HandshakeFrontRunTest is HandshakeBase {
     }
 
     function test_fundedUntilUnboundedWithCronOff() public {
-        rx.setBurnRate(0.0112 ether, 1053);
+        rx.setBurnRate(0.0112 ether, 1053, 0);
         rx.setCron(false);
         assertEq(rx.fundedUntil(), type(uint256).max);
     }
@@ -182,7 +182,7 @@ contract HandshakeFrontRunTest is HandshakeBase {
         assertTrue(ok);
         vm.prank(hunter);
         vm.expectRevert(HandshakeReactive.NotOwner.selector);
-        rx.setBurnRate(1, 1);
+        rx.setBurnRate(1, 1, 0);
     }
 }
 

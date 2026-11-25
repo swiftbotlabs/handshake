@@ -34,6 +34,11 @@ NAMES+=("allowlist emitted after the condition"); PATCHES+=('/function postProof
 NAMES+=("fee sweep ignores the gas floor"); PATCHES+=('s/sent = bal - gasFloor;/sent = bal;/'); FILES+=("src/HandshakeEscrow.sol")
 NAMES+=("fee sweep credits the caller, not the watcher"); PATCHES+=('s/abi.encodeWithSignature("request(address)", _CALLBACK_SENDER)/abi.encodeWithSignature("request(address)", msg.sender)/'); FILES+=("src/HandshakeEscrow.sol")
 NAMES+=("data-word winner accepts a non-address"); PATCHES+=('s/if (raw >> 160 != 0) continue;/\/\/ mutant/'); FILES+=("src/HandshakeReactive.sol")
+NAMES+=("event cap never pauses a busy proof"); PATCHES+=('s/if (++r.count > maxEventsPerWindow \&\& !r.paused) {/if (false) {/'); FILES+=("src/HandshakeReactive.sol")
+NAMES+=("fundedUntil ignores proof events (the v5 formula)"); PATCHES+=('s/burn += (liveKeys \* (maxEventsPerWindow + 1)/burn += 0 * (liveKeys * (maxEventsPerWindow + 1)/'); FILES+=("src/HandshakeReactive.sol")
+NAMES+=("paused subscription unsubscribed again on close"); PATCHES+=('s/if (!rates\[key\].paused) {/if (true) {/'); FILES+=("src/HandshakeReactive.sol")
+NAMES+=("paused proof resumes before its window ends"); PATCHES+=('s/if (r.paused \&\& block.timestamp < uint256(r.windowStart) + eventWindow) {/if (false) {/'); FILES+=("src/HandshakeReactive.sol")
+NAMES+=("open proof subscriptions not counted"); PATCHES+=('s/            ++liveKeys;/            \/\/ mutant/'); FILES+=("src/HandshakeReactive.sol")
 killed=0
 for i in "${!NAMES[@]}"; do
   f=${FILES[$i]}
