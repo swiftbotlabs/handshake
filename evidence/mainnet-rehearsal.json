@@ -1,0 +1,14 @@
+{
+ "total_usd": 1.8994,
+ "spent_usd": 0.8994,
+ "bounty_usd": 1.0,
+ "winner_kind": "contract",
+ "rn_gas": 2687748,
+ "base_gas": 3540021,
+ "rx_fund_wei": 2000000000000000000,
+ "base_value_wei": 520000000000000,
+ "react_ops": 0.577665,
+ "eth_usd": 1637.03,
+ "react_usd": 0.0019528,
+ "supplies_last_hour": 5
+}

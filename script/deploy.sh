@@ -14,7 +14,7 @@ save() { python3 -I -c "import json,sys;d=json.load(open('$OUT'));d[sys.argv[1]]
 get() { python3 -I -c "import json,sys;print(json.load(open('$OUT')).get(sys.argv[1],''))" "$1"; }
 create() { # rpc, contract, value (wei or Nether), args...  (plain output; the --json shape changed between forge versions)
   local rpc=$1 c=$2 v=$3; shift 3
-  local gp=""; [ "$rpc" = "$LASNA" ] && gp="--gas-price 100gwei --gas-limit 2300000"
+  local gp=""; [ "$rpc" = "$LASNA" ] && gp="--gas-price 100gwei --gas-limit 4000000"
   forge create --broadcast --rpc-url "$rpc" --private-key "$RX_TN_KEY" --value "$v" $gp "$c" ${1:+--constructor-args "$@"} 2>&1 | awk '/Deployed to:/{print $3}'
 }
 
