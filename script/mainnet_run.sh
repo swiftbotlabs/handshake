@@ -38,12 +38,12 @@ plan)
 deploy)
   loadkey
   ADDR=$(cast wallet address --private-key "$HS_MAIN_KEY"); echo "deployer $ADDR: $(cast balance --ether --rpc-url $RN $ADDR) REACT, $(cast balance --ether --rpc-url $BASE $ADDR) ETH on Base"
-  [ -n "$(get reactive)" ] || save reactive "$(forge create --broadcast --rpc-url $RN --private-key "$HS_MAIN_KEY" --value ${RX_FUND:-2ether} --gas-price 100gwei --gas-limit 4000000 src/HandshakeReactive.sol:HandshakeReactive 2>&1 | awk '/Deployed to:/{print $3}')"
+  [ -n "$(get reactive)" ] || save reactive "$(forge create --broadcast --rpc-url $RN --private-key "$HS_MAIN_KEY" --value ${RX_FUND:-5ether} --gas-price 100gwei --gas-limit 4000000 src/HandshakeReactive.sol:HandshakeReactive 2>&1 | awk '/Deployed to:/{print $3}')"
   [ -n "$(get escrow)" ] || save escrow "$(forge create --broadcast --rpc-url $BASE --private-key "$HS_MAIN_KEY" --value ${GAS_FLOOR:-500000000000000} src/HandshakeEscrow.sol:HandshakeEscrow --constructor-args $PROXY $(get reactive) ${MIN_BOUNTY:-100000000000000} ${POST_FEE:-20000000000000} 0x0000000000000000000000000000000000000000 ${GAS_FLOOR:-500000000000000} 2>&1 | awk '/Deployed to:/{print $3}')"
   if [ "$(cast call --rpc-url $RN $(get reactive) 'escrow()(address)')" = "0x0000000000000000000000000000000000000000" ]; then
     h=$(cast send --rpc-url $RN --private-key "$HS_MAIN_KEY" --gas-price 100gwei $(get reactive) 'linkEscrow(uint256,address)' 8453 $(get escrow) --json | python3 -I -c "import json,sys;print(json.load(sys.stdin)['transactionHash'])")
     note "linkEscrow (Reactive mainnet) $h"
-    h=$(cast send --rpc-url $RN --private-key "$HS_MAIN_KEY" --gas-price 100gwei $(get reactive) 'setBurnRate(uint256,uint256,uint256)' 11200000000000000 1053 12500000000000000 --json | python3 -I -c "import json,sys;print(json.load(sys.stdin)['transactionHash'])")
+    h=$(cast send --rpc-url $RN --private-key "$HS_MAIN_KEY" --gas-price 100gwei $(get reactive) 'setBurnRate(uint256,uint256,uint256)' ${COST_TICK:-21600000000000000} 1053 ${COST_EVENT:-23100000000000000} --json | python3 -I -c "import json,sys;print(json.load(sys.stdin)['transactionHash'])")
     note "setBurnRate $h"
   fi
   note "deployed: reactive $(get reactive) (Reactive mainnet 1597), escrow $(get escrow) (Base 8453); fundedUntil $(cast call --rpc-url $RN $(get reactive) 'fundedUntil()(uint256)')" ;;
@@ -55,10 +55,23 @@ bounty)
       | python3 -I -c "import json,sys;r=json.load(sys.stdin);print(r['transactionHash'], r['status'])")
   note "postProof on Aave v3 Base (Supply reserve=USDC pinned, winner=onBehalfOf), ${BOUNTY_ETH:-0.0005} ETH incl. fee, deadline +6 h: $h" ;;
 bounty-usdc)
+  # (mainnet burn rates above: Reactive's documented fee max(gas price, base fee) x (gas used + 100,000) at 100 gwei, i.e. a 116k-gas tick
+  #  = 0.0216 REACT and a 131k-gas proof = 0.0231 REACT; Lasna billed less (0.0112 per tick), so these are the conservative side.)
   # The default for the live run: pay the bounty in USDC. Many Aave suppliers on Base are smart contracts (vaults, routers) that
   # refuse plain ETH, so an ETH payout to them reverts and the bounty waits; an ERC-20 transfer to a contract always lands.
   loadkey
   DL=$(( $(date +%s) + 6*3600 )); AMT=${BOUNTY_USDC_UNITS:-1000000}   # 1 USDC
+  # runway gate: the watcher must stay funded past the deadline + 1 h even with this bounty's subscription at its full event cap
+  python3 -I - "$(cast balance --rpc-url $RN $(get reactive))" "$(cast call --rpc-url $RN $(get reactive) 'burnPerPeriod()(uint256,uint256)' | awk '{print $1}' | tr '\n' ' ')" \
+    "$(cast call --rpc-url $RN $(get reactive) 'maxEventsPerWindow()(uint256)' | awk '{print $1}')" "$(cast call --rpc-url $RN $(get reactive) 'costPerEvent()(uint256)' | awk '{print $1}')" \
+    "$(cast call --rpc-url $RN $(get reactive) 'eventWindow()(uint256)' | awk '{print $1}')" "$DL" <<'PY' || { echo "STOP: watcher not funded past the deadline; top up REACT first"; exit 4; }
+import sys, time
+bal = int(sys.argv[1]); burn, period = map(int, sys.argv[2].split()); cap, ce, win, dl = map(int, sys.argv[3:7])
+burn += (cap + 1) * ce * period // win
+until = int(time.time()) + (bal // burn) * period
+print(f"runway with this bounty open: until {time.strftime('%Y-%m-%d %H:%M:%SZ', time.gmtime(until))}, deadline {time.strftime('%Y-%m-%d %H:%M:%SZ', time.gmtime(dl))}")
+sys.exit(0 if until > dl + 3600 else 1)
+PY
   FEE=$(cast call --rpc-url $BASE $(get escrow) 'postFee()(uint256)' | awk '{print $1}')
   h=$(cast send --rpc-url $BASE --private-key "$HS_MAIN_KEY" $USDC 'approve(address,uint256)' $(get escrow) $AMT --json | python3 -I -c "import json,sys;r=json.load(sys.stdin);print(r['transactionHash'], r['status'])")
   note "USDC approve $AMT to the escrow: $h"
