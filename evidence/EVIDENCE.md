@@ -2,7 +2,7 @@
 
 **9 proofs seen, 7 paid, 2 ignored by design, 4 unattended refunds, 0 stuck; median 2 s proof to payout (max 2 s).**
 
-Built from chain data only by `python3 -I -u script/triples.py` on 2026-11-25 11:50:57 UTC (Base Sepolia block 63427932, Lasna block 9214970). Machine-readable: [`triples.csv`](triples.csv), [`totals.json`](totals.json).
+Built from chain data only by `python3 -I -u script/triples.py` on 2026-11-25 12:34:38 UTC (Base Sepolia block 63441020, Lasna block 9217388). Machine-readable: [`triples.csv`](triples.csv), [`totals.json`](totals.json).
 Each Reactive request (a `ProofSeen` or `ExpiryRequested` log of the reactive contract on Lasna) is paired with the callback that landed on the escrow; a request with no landed callback would be listed as **stuck**. Proof times are the origin block's timestamp, callback times the settlement block's. Reproduce any paid loop without sending anything: `script/dryrun.sh <version> <bounty id>`.
 
 ## Reproduce it yourself (read-only, sends nothing)
@@ -20,7 +20,7 @@ python3 -I -u script/triples.py      # rebuild this page, triples.csv and totals
 
 | Route | Proofs seen | Paid | Ignored (allowlist) | Cron refunds | Callbacks refused by escrow | Stuck | Closed by issuer | Open | Median s | Max s |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Base Sepolia escrow, v1-v5 | 9 | 7 | 2 | 4 | 0 | 0 | 1 | 0 | 2 | 2 |
+| Base Sepolia escrow, v1-v5 | 9 | 7 | 2 | 4 | 0 | 0 | 1 | 1 | 2 | 2 |
 | Experiment: escrow on Lasna itself (L1) | 1 | 0 | 0 | 0 | 0 | 1 | 1 | 1 | - | - |
 
 ## Test coverage of the contracts (`script/coverage.sh`, `forge coverage` over src/)
@@ -77,13 +77,14 @@ Not reached by any test:
 | 1 | Unattended refund test (v5): nobody will claim this | **refunded (cron)** | [post](https://sepolia.basescan.org/tx/0xb8027e8616f444aec981a5fae8e6dc5f0dbfeeeb66887ea909139e9875f4b1da) |  | [23:17:11](https://lasna.reactscan.net/tx/0xe451e8f1b7053a141395f964aeafaf2a0332231c63849ee520afcba6f1563d39) | [23:17:14](https://sepolia.basescan.org/tx/0x04074579df25c7d9f0ccb63f27a5025e6947c9d89b1a2e7dcce4c2bcbdf28083) | 433 | 0.0001 ETH · deadline 2026-11-17 23:10:01; Cron1000 tick -> callback refunded the issuer; seconds = refund minus deadline |
 | 2 | First to supply WBTC to Aave v3 on Sepolia | **paid** | [post](https://sepolia.basescan.org/tx/0xba9887d779252df7ba4d589d48772b0c3ddd41a003fc85822db64cbc5ce28b44) | [22:50:36](https://sepolia.etherscan.io/tx/0xfed5365395b7a5cc2d0a1d027eb7f268ee9ca912901526644302c9cc6a48e725) | [22:50:36](https://lasna.reactscan.net/tx/0xac93f7450f67f31ea4a61eceee3ad18096d7577099da2719d710d6c918c97468) | [22:50:38](https://sepolia.basescan.org/tx/0xa3d235420b2711ef47e4eb30c38174cd458b93e77c636957483ff49f6f4e0be5) | 2 | 0.0001 ETH · 0x7a3db09c… |
 | 3 | Open to anyone: run job 4243 on the Sepolia job board | **refunded (cron)** | [post](https://sepolia.basescan.org/tx/0x9c9a9831eb452c0f7b21612d54dc305c046825ea2a7fd6850f69a15b0c3aa1a8) |  | [23:29:51](https://lasna.reactscan.net/tx/0x72cf69b7681aa5cb3d8c2eee3d037512181ff1d9b553036f0355942515e07fd7) | [23:29:53](https://sepolia.basescan.org/tx/0x2aba3b7145fe5931aaed5f797cdf826c9482145e60015af4a8026e2be984b02f) | 535 | 0.0005 ETH · deadline 2026-11-24 23:20:58; Cron1000 tick -> callback refunded the issuer; seconds = refund minus deadline |
+| 4 | Open to anyone: run job 4244 on the Sepolia job board | **open** | [post](https://sepolia.basescan.org/tx/0x5446ff9417ee3faefde82f1db038209b60ba5962ad41d6b6b553639472cde4ce) |  |  |  |  | deadline 2026-12-07 21:00:00 |
 
 ## Experiment L1: escrow on Lasna (Lasna -> Lasna callbacks)
 
 | # | Bounty | Outcome | Post | Proof (origin) | react() (Lasna) | Callback | s | Winner / note |
 |---|---|---|---|---|---|---|---|---|
 | 1 | First to supply WBTC to Aave v3 on Sepolia (paid in lREACT o | **open, past deadline** | [post](https://lasna.reactscan.net/tx/0xc774cd354d3aee788443b9f0931ddf0a0cbf0cef31ddec42f6b6a3c994dd2114) |  |  |  |  | deadline 2026-11-23 04:57:59; no refund has landed on this escrow yet |
-| 2 | First to wrap 0.003 ETH on Sepolia WETH (paid in lREACT on L | **stuck** | [post](https://lasna.reactscan.net/tx/0xfcd551a3b330af5fcd246994a70f835c37d0ddd0154a4aa16f8212c01099c3be) | [04:58:24](https://sepolia.etherscan.io/tx/0xbc4b80d9e190d6bade27989f1911efce1770f07b283b76a7a8a4ef4ecfcab37a) | [04:58:24](https://lasna.reactscan.net/tx/0x90cfc79086a821695ee301a125db7af9ff472b455e611bc766bad6bde6e3d657) |  |  | 0xb97f6998… Reactive requested a callback to Reactive Lasna; nothing landed on the escrow (4732 min so far) |
+| 2 | First to wrap 0.003 ETH on Sepolia WETH (paid in lREACT on L | **stuck** | [post](https://lasna.reactscan.net/tx/0xfcd551a3b330af5fcd246994a70f835c37d0ddd0154a4aa16f8212c01099c3be) | [04:58:24](https://sepolia.etherscan.io/tx/0xbc4b80d9e190d6bade27989f1911efce1770f07b283b76a7a8a4ef4ecfcab37a) | [04:58:24](https://lasna.reactscan.net/tx/0x90cfc79086a821695ee301a125db7af9ff472b455e611bc766bad6bde6e3d657) |  |  | 0xb97f6998… Reactive requested a callback to Reactive Lasna; nothing landed on the escrow (4776 min so far) |
 | 2 | First to wrap 0.003 ETH on Sepolia WETH (paid in lREACT on L | **closed by issuer** | [post](https://lasna.reactscan.net/tx/0xfcd551a3b330af5fcd246994a70f835c37d0ddd0154a4aa16f8212c01099c3be) |  |  | [11:40:20](https://lasna.reactscan.net/tx/0x898698f60c921c35ac9375054d0074feede8d3bbe1421e11fafa0a6ef56fd3c6) |  | 0.19 lREACT · expire() by anyone |
 
 ## How to read it, and what it does not show
