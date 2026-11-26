@@ -39,3 +39,12 @@
 - 2026-11-22T04:58:17Z REACTIVE-DEST 5318007 postProof WETH9 Deposit>=0.003 on Sepolia, 0.2 lREACT, +1 h: 0xfcd551a3b330af5fcd246994a70f835c37d0ddd0154a4aa16f8212c01099c3be 0x1
 - 2026-11-22T04:58:55Z REACTIVE-DEST keeper (not the issuer) wraps 0.003 ETH on Sepolia WETH9: 0xe7d32ff11ca09b9d60c2c902bd7b7fbbef3a8cfb16c6c8c53100a3b519652221 (block 12186586)
 - 2026-11-25T12:34:22Z v5 O3 OPEN bounty for an outside claimant: postProof 'Open to anyone: run job 4244 on the Sepolia job board' (pinned topic1, work>=1), 500000000000000 wei, deadline 2026-12-07T21:00:00Z, Base Sepolia 0x5446ff9417ee3faefde82f1db038209b60ba5962ad41d6b6b553639472cde4ce 0x1
+- 2026-11-26T06:18:32Z MAINNET linkEscrow (Reactive mainnet) 0x9c6363c7b5315e77cb86f02633447b16f906bd05e914585f69b266141c29de4d
+- 2026-11-26T06:18:36Z MAINNET setBurnRate 0x2d1042589c70f9495a5be1b7bec14336cafc504104d7739e402b9f0bb7d56fc1
+- 2026-11-26T06:18:38Z MAINNET deployed: reactive 0x2BF7626cfFcB1f8c3ae7feF12fE2cdF5fd770843 (Reactive mainnet 1597), escrow 0x1cf9930fbCa7F7F5D76fe99710CC2047E88e0a1e (Base 8453); fundedUntil 1795917160 [1.795e9]
+- 2026-11-26T06:18:58Z MAINNET USDC approve 1000000 to the escrow: 0x9180f30cfc69a779dc2031be30dfc3c2e92e6accdd22278550808a7ed071ed08 0x1
+- 2026-11-26T06:19:01Z MAINNET postProofToken on Aave v3 Base (Supply reserve=USDC pinned, winner=onBehalfOf), 1000000 USDC units, fee 20000000000000 wei, deadline +6 h: 0x99ab86fbbcefb732d98b2752bd0d4750b74c931add7e78b8a1839b82aef7f5e2 0x1
+- 2026-11-26T06:20:07Z MAINNET Aave v3 Supply of USDC on Base by an outside user (onBehalfOf 0x82904927b7F526cf21683cb616f73b4B0e30E6EC): 0x320a0e9f6929e4f086580d05bcf035d3c35428875c607a03988c8f056e6078fb (Base block 62418161)
+- 2026-11-26T06:20:07Z MAINNET ProofSeen on Reactive mainnet: 0x10e3298cb2f9ec1aa49f85b99fd75cc7b91c85ba31fef1a84f212f15a6fac72d (block 10467958); Closed 0xb372b6361087f55363ed40d44a3892f54a1f3b196ee1ab2d651584da8d6a7b64 (block 10467960)
+- 2026-11-26T06:20:09Z MAINNET BountyPaid #1 on Base: 1 USDC to 0x82904927b7F526cf21683cb616f73b4B0e30E6EC (via proof): 0xf4a203cc56affa5f12a5bc01e6ac473bf905f005536e1818aecac91cf5241918 (block 62418169) - 8 Base blocks (~1.6 s) after the Supply, 69 s after the post
+- 2026-11-26T06:55:06Z MAINNET after the run: bounty #1 status Paid, escrow USDC balance 0; reactive fundedUntil 2026-11-29T00:43:33Z; reactive debt 0
