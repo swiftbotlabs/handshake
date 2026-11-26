@@ -3,6 +3,9 @@
 Post a bounty and walk away. Handshake pays the winner the moment the chain proves the work was done, on whichever chain it
 happened, and refunds you by itself if the deadline passes. No keeper bot, no server, no reminder in your calendar.
 
+**On mainnet (26 Nov 2026): a 1 USDC bounty on Base, watched from Reactive mainnet, was paid to an outside address 69 s after it was
+posted and 2 s after the proof, with nobody touching it.** Every hash: [Mainnet run](#mainnet-run-26-nov-2026).
+
 **On chain so far (testnets): 9 proofs seen, 7 paid, 2 ignored by design, 4 unattended refunds, 0 stuck; median 2 s proof to payout (max 2 s).** Every loop with every hash, rebuilt from chain data by a script:
 [evidence/EVIDENCE.md](evidence/EVIDENCE.md) ([CSV](evidence/triples.csv)). Replay any loop locally without sending anything:
 `./script/dryrun.sh v5 2`.
@@ -87,6 +90,54 @@ proof to `msg.sender` is already the norm, because the winner topic is whoever s
 
 Without the allowlist, the bot's wrap would have won (that is exactly loop C). Script: `script/frontrun_demo.sh`.
 
+## Mainnet run (26 Nov 2026)
+
+Reactive mainnet (chain 1597) watches; Base (8453) holds the money and pays. The bounty: "first to supply USDC to Aave v3 on Base"
+(the Aave Pool's `Supply` event, reserve pinned to USDC, winner = `onBehalfOf`), **1 USDC**, deadline 6 hours. After posting it, nobody on
+our side did anything. Times are block timestamps (UTC).
+
+| Step | Chain | Transaction | Time |
+|---|---|---|---|
+| Bounty posted (`postProofToken`, 1 USDC) | Base | [0x99ab86fb…](https://basescan.org/tx/0x99ab86fbbcefb732d98b2752bd0d4750b74c931add7e78b8a1839b82aef7f5e2) | 06:19:00 |
+| The proof: an outside user's Aave v3 USDC supply | Base | [0x320a0e9f…](https://basescan.org/tx/0x320a0e9f6929e4f086580d05bcf035d3c35428875c607a03988c8f056e6078fb) | 06:20:07 |
+| `react()`: ProofSeen | Reactive mainnet | [0x10e3298c…](https://reactscan.net/tx/0x10e3298cb2f9ec1aa49f85b99fd75cc7b91c85ba31fef1a84f212f15a6fac72d) | 06:20:07 |
+| Callback: **BountyPaid, 1 USDC** to `0x82904927…` (proofTx = the supply above) | Base | [0xf4a203cc…](https://basescan.org/tx/0xf4a203cc56affa5f12a5bc01e6ac473bf905f005536e1818aecac91cf5241918) | 06:20:09 |
+| Watch closed, subscription dropped | Reactive mainnet | [0xb372b636…](https://reactscan.net/tx/0xb372b6361087f55363ed40d44a3892f54a1f3b196ee1ab2d651584da8d6a7b64) | 06:20:09 |
+
+**Proof to payout: 2 s (8 Base blocks). Post to payout: 69 s.** The winner `0x82904927b7F526cf21683cb616f73b4B0e30E6EC` is not ours: it is a
+USDC vault contract that supplied to Aave inside its depositor's transaction (sent by `0x8aa483e6…`). Contracts like it are why the live
+bounty pays in USDC: an ETH payout to a contract supplier reverted in the fork rehearsal ([evidence/mainnet-rehearsal.md](evidence/mainnet-rehearsal.md)).
+
+Contracts: `HandshakeReactive` [0x2BF7626cfFcB1f8c3ae7feF12fE2cdF5fd770843](https://reactscan.net/address/0x2BF7626cfFcB1f8c3ae7feF12fE2cdF5fd770843)
+(Reactive mainnet), `HandshakeEscrow` [0x1cf9930fbCa7F7F5D76fe99710CC2047E88e0a1e](https://basescan.org/address/0x1cf9930fbCa7F7F5D76fe99710CC2047E88e0a1e)
+(Base), vault `0xefE5418466A73FD98Bdbe9B3270194117675ff03`. Setup on Reactive mainnet: [linkEscrow](https://reactscan.net/tx/0x9c6363c7b5315e77cb86f02633447b16f906bd05e914585f69b266141c29de4d),
+[setBurnRate](https://reactscan.net/tx/0x2d1042589c70f9495a5be1b7bec14336cafc504104d7739e402b9f0bb7d56fc1). The watcher started with about
+5 REACT (bought on Base and bridged with Reactive's bridge); at 09:01 UTC it still held 4.755 REACT with no debt, its cron still running,
+and `fundedUntil()` read 29 Nov 01:22 UTC. Funding the run took about $2.80 (0.001 ETH and 1.1 USDC), 1 USDC of it the bounty itself. Hashes also in
+`demo_log.md` and `deployments-mainnet.json`.
+
+## Event cap, live (v6 on testnets, 26 Nov 2026)
+
+v6 (the event cap and the event-aware `fundedUntil()`, see [below](#trust-limits-and-react-runway)) is deployed on the testnets: reactive
+(Lasna) `0xe24d533B062320a810c5376B4DABcE99fEE960FD`, escrow (Base Sepolia) `0x4C10cd078E0dF203d8eac468b2324a0F58f2591c`. To show the cap
+on a really busy event, I posted a bounty nobody can win: "any WETH9 deposit >= 1000 ETH on Sepolia", 0.0001 ETH, deadline 08:02:53 UTC.
+Its subscription receives every WETH9 `Deposit` on Sepolia, and Reactive bills each one.
+
+| Step | Chain | Transaction | Time |
+|---|---|---|---|
+| Bounty posted | Base Sepolia | [0x5e92a4e8…](https://sepolia.basescan.org/tx/0x5e92a4e84db526e3e6d3c23d888c0654183abfa9e2116cb6aa378919aa273258) | 06:02:55 |
+| Cap hit: `ProofThrottled` (unsubscribed, resume at 07:03:01) | Lasna | [0x0c7adda8…](https://lasna.reactscan.net/tx/0x0c7adda867c6e316b22580fa8da4c0d2cad04c62d43a20376c752141f57d8a20) | 06:03:12 |
+| First cron tick after the window: `ProofResumed` | Lasna | [0xd29a093b…](https://lasna.reactscan.net/tx/0xd29a093ba8bc5049b3d45b736ba25b7db2b9864d140222ef67aef0235f7e9dca) | 07:07:40 |
+| Cap hit again: `ProofThrottled` | Lasna | [0x05509026…](https://lasna.reactscan.net/tx/0x0550902669834596daa0c30543dd27c7bd7152244fb1960843dcf2d3915e59b7) | 07:08:00 |
+| First tick after the deadline: `ProofResumed` + `ExpiryRequested` | Lasna | [0x8ed5345c…](https://lasna.reactscan.net/tx/0x8ed5345cf8cf143dfa6a1694e86ed5cfbff37e7b3277447c12d9419e073c01aa) | 08:20:30 |
+| Watch closed | Lasna | [0x8892baed…](https://lasna.reactscan.net/tx/0x8892baed03bf9df55679bfddca738c33dda07c6f4a525e5a50b4e65f5da460de) | 08:20:31 |
+| **BountyRefunded**, 0.0001 ETH back to the issuer | Base Sepolia | [0x05fb6660…](https://sepolia.basescan.org/tx/0x05fb66609724984db4544091352ed42396ddd1826b0b13114bfb7f54f12bedc2) | 08:20:32 |
+
+Of the 2 h 18 min the bounty was open, its subscription was live for about 40 seconds; the rest of the WETH9 stream never reached the
+bill. The published runway reacted the moment the busy proof opened: `fundedUntil()` read 30 Nov 14:28 UTC before the post and
+27 Nov 03:44 UTC after it, because it now counts the open subscription at its full cap. Setup: [linkEscrow](https://lasna.reactscan.net/tx/0x4431d230da8513b9bbfe97b6c3ccda354dc602b2dd55c9b40680ccf04bade45a),
+[setBurnRate](https://lasna.reactscan.net/tx/0x256674082e0cc9ef2edf88f0fed4a040c5e780da4ba2101db40c037cd5147e2e); addresses in `deployments-v6.json`.
+
 ## It runs (testnets, 17 Nov 2026)
 
 **v5 (current: fees fund REACT, data-word winners, cron on and funded)**: reactive (Lasna) `0xD27824e127D8615e7e24218f3F9DF163901253D0`,
@@ -98,8 +149,8 @@ escrow (Base Sepolia) `0x1cD6c715f1b5579161864361e275e250a11c8004`. Nobody touch
 | **Unattended refund:** judged bounty, deadline 23:10:01, nobody claims | none | [Cron1000 tick, ExpiryRequested](https://lasna.reactscan.net/tx/0xe451e8f1b7053a141395f964aeafaf2a0332231c63849ee520afcba6f1563d39) 23:17:11 | [BountyRefunded](https://sepolia.basescan.org/tx/0x04074579df25c7d9f0ccb63f27a5025e6947c9d89b1a2e7dcce4c2bcbdf28083) 23:17:14 | next tick |
 | **Fees → REACT:** `fundReactive()` | | watcher +0.00381041 lREACT (exactly 100 x the swept fees) | [fundReactive](https://sepolia.basescan.org/tx/0x949f738aac196727633099a42fdd336799429b2b4b37a89b8847d261289f9fa5): 0.0000381 ETH of fee surplus to Reactive's faucet | |
 
-The v5 cron runs unattended; `fundedUntil()` on the v5 reactive contract shows how long its REACT lasts at the idle rate. The code in `main`
-(v6, tested, not yet deployed) also budgets proof events and caps their rate: see "Runway that counts events" below.
+The v5 cron runs unattended; `fundedUntil()` on the v5 reactive contract shows how long its REACT lasts at the idle rate. v6 (deployed on the
+testnets 26 Nov, [above](#event-cap-live-v6-on-testnets-26-nov-2026)) also budgets proof events and caps their rate: see "Runway that counts events" below.
 
 Every earlier deployment ran end to end too (v4 above, v3, v2, v1 below). Times are **block timestamps**; `./script/latency.sh <origin tx> <lasna tx> <payout tx>`
 recomputes any row from public RPCs.
@@ -133,11 +184,14 @@ not chain time.
 
 ## Verified addresses
 
-Every contract below is verified on [Sourcify](https://sourcify.dev) with an **exact match** (creation and runtime bytecode), including the
-reactive contracts on Reactive Lasna.
+Every contract below is verified on [Sourcify](https://sourcify.dev), including the reactive contracts on Reactive Lasna and Reactive mainnet.
+All are **exact matches** (creation and runtime bytecode) except where the table says otherwise.
 
 | Version | Contract | Chain | Address | Source |
 |---|---|---|---|---|
+| mainnet (v6 code) | HandshakeReactive | Reactive mainnet (1597) | `0x2BF7626cfFcB1f8c3ae7feF12fE2cdF5fd770843` | [Sourcify](https://repo.sourcify.dev/1597/0x2BF7626cfFcB1f8c3ae7feF12fE2cdF5fd770843) (runtime exact match) |
+| mainnet | HandshakeEscrow | Base (8453) | `0x1cf9930fbCa7F7F5D76fe99710CC2047E88e0a1e` | [Sourcify](https://repo.sourcify.dev/8453/0x1cf9930fbCa7F7F5D76fe99710CC2047E88e0a1e) |
+| mainnet | BountyVault | Base (8453) | `0xefE5418466A73FD98Bdbe9B3270194117675ff03` | [Sourcify](https://repo.sourcify.dev/8453/0xefE5418466A73FD98Bdbe9B3270194117675ff03) (match; metadata differs) |
 | v5 (fees -> REACT, data-word winners) | HandshakeReactive | Reactive Lasna (5318007) | `0xD27824e127D8615e7e24218f3F9DF163901253D0` | [Sourcify](https://repo.sourcify.dev/5318007/0xD27824e127D8615e7e24218f3F9DF163901253D0) |
 | v5 | HandshakeEscrow | Base Sepolia (84532) | `0x1cD6c715f1b5579161864361e275e250a11c8004` | [Sourcify](https://repo.sourcify.dev/84532/0x1cD6c715f1b5579161864361e275e250a11c8004) |
 | v5 | BountyVault | Base Sepolia | `0x3B05973D540d653B2F6E05Ee351648Bc0862182c` | [Sourcify](https://repo.sourcify.dev/84532/0x3B05973D540d653B2F6E05Ee351648Bc0862182c) |
@@ -190,7 +244,7 @@ public `expire()`. It returns "unbounded" while the cron is off, because nothing
 front-run run above used 0.144 lREACT for about 9 reactions (3 escrow events, 5 WETH deposits seen in the minute the wildcard subscription
 was live, 1 close), about 0.016 lREACT per reaction including the callback request.
 
-**Runway that counts events (v6, in `main`, not yet deployed).** Reactive bills every log a subscription delivers, about 0.0125 lREACT each
+**Runway that counts events (v6, deployed on the testnets 26 Nov; [live run](#event-cap-live-v6-on-testnets-26-nov-2026)).** Reactive bills every log a subscription delivers, about 0.0125 lREACT each
 on Lasna, whether or not it pays anyone. On 22 Nov a test bounty on every WETH9 `Deposit` on Sepolia drained a watcher in 2.5 hours while
 the ticks-only `fundedUntil()` still showed days. An allowance alone cannot fix that, because nobody knows in advance how busy an event will
 be; a cap alone leaves the published number wrong. v6 does both:
@@ -270,7 +324,7 @@ wrong; the allowlist is emitted before the condition; only the issuer can restri
 
 ## Limits
 
-- Testnets only.
+- One mainnet run so far (Reactive mainnet + Base, a 1 USDC bounty, [above](#mainnet-run-26-nov-2026)); every other loop is on testnets.
 - On the testnets posting fees buy the watcher's REACT on chain (Reactive's faucet contract). Mainnet has no such on-ramp contract
   today, so there `reactFunder` is zero and the operator buys and bridges REACT by hand (cents a day at 17 Nov prices).
 - A wildcard proof on a busy contract (like WETH9) runs `react()` for every matching log until it pays, so keep such deadlines short.
